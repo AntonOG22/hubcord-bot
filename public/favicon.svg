@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8CF5C4"/>
+      <stop offset="45%" stop-color="#3ecf8e"/>
+      <stop offset="100%" stop-color="#1f9d64"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2fb87c"/>
+      <stop offset="100%" stop-color="#127a4a"/>
+    </linearGradient>
+  </defs>
+  <!-- outer facet ring -->
+  <polygon points="32,4 50,14 56,32 46,54 18,54 8,32 14,14"
+           fill="url(#side)" stroke="#0d5c38" stroke-width="2" stroke-linejoin="round"/>
+  <!-- inner table -->
+  <polygon points="32,12 44,19 48,32 41,47 23,47 16,32 20,19"
+           fill="url(#face)" stroke="#0d5c38" stroke-width="1.4" stroke-linejoin="round"/>
+  <!-- facet lines -->
+  <path d="M32,12 L32,47 M20,19 L44,19 M16,32 L48,32 M23,47 L41,47"
+        stroke="#0d5c38" stroke-width="1" opacity="0.55" fill="none"/>
+  <!-- highlight -->
+  <path d="M23,17 L27,14 L27,24 Z" fill="#eafff5" opacity="0.85"/>
+</svg>
