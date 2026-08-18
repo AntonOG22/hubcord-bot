@@ -20,6 +20,64 @@ function showScreen(name) {
   appScreen.classList.toggle('hidden', name !== 'app');
 }
 
+// ---------- Login error banner ----------
+//
+// /auth/login and /auth/callback redirect back here with ?auth_error=... on
+// failure instead of showing a bare text page. The "cooldown" case also
+// disables every Login with Discord link for the remaining wait, mirroring
+// the real server-side lockout (see dashboard.js) so nobody keeps clicking
+// through a block that's just going to redirect them right back here.
+function checkAuthError() {
+  const params = new URLSearchParams(window.location.search);
+  const err = params.get('auth_error');
+  if (!err) return;
+
+  const banner = document.getElementById('auth-error-banner');
+  const text = document.getElementById('auth-error-text');
+  const loginLinks = document.querySelectorAll('a[href="/auth/login"]');
+  if (!banner || !text) return;
+
+  const MESSAGES = {
+    state: 'Your login link expired or was already used — click "Login with Discord" to start a fresh one.',
+    failed: "Login failed on Discord's side — this is usually temporary. Please try again in a moment.",
+  };
+
+  banner.classList.remove('hidden');
+
+  if (err === 'cooldown') {
+    let seconds = parseInt(params.get('retry'), 10) || 60;
+    loginLinks.forEach((link) => {
+      link.dataset.href = link.getAttribute('href');
+      link.removeAttribute('href');
+      link.classList.add('disabled-link');
+    });
+
+    const tick = () => {
+      const mins = Math.floor(seconds / 60);
+      const secs = String(seconds % 60).padStart(2, '0');
+      text.textContent = `Too many login attempts — please wait ${mins}:${secs} before trying again.`;
+      if (seconds <= 0) {
+        clearInterval(interval);
+        banner.classList.add('hidden');
+        loginLinks.forEach((link) => {
+          link.setAttribute('href', link.dataset.href);
+          link.classList.remove('disabled-link');
+        });
+        return;
+      }
+      seconds -= 1;
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+  } else {
+    text.textContent = MESSAGES[err] || 'Something went wrong logging in — please try again.';
+  }
+
+  history.replaceState(null, '', window.location.pathname);
+}
+
+checkAuthError();
+
 async function boot() {
   try {
     const res = await api('/api/me');

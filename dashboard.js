@@ -166,16 +166,52 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     next();
   }
 
+  // ---------- Login cooldown ----------
+  // A failed login (bad/expired state, or Discord's token endpoint erroring —
+  // including Discord's own global rate limit, which is exactly what repeated
+  // rapid retries trip) puts that IP on a short, escalating cooldown. This
+  // protects Discord's API from getting hammered by someone (or a bug)
+  // retrying in a loop, which is what actually caused an outage once already.
+  // Enforced here, server-side — /auth/login refuses to even start the
+  // Discord round-trip while an IP is on cooldown, no matter what the client
+  // does or doesn't send.
+  const LOGIN_FAIL_THRESHOLD = 2;
+  const LOGIN_LOCKOUT_MS = 3 * 60 * 1000;
+  const loginAttempts = new Map(); // ip -> { fails, lockedUntil }
+
+  function loginState(ip) {
+    return loginAttempts.get(ip) || { fails: 0, lockedUntil: 0 };
+  }
+  function recordLoginFailure(ip) {
+    const state = loginState(ip);
+    state.fails += 1;
+    if (state.fails >= LOGIN_FAIL_THRESHOLD) {
+      state.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+      state.fails = 0;
+    }
+    loginAttempts.set(ip, state);
+  }
+  function clearLoginFailures(ip) {
+    loginAttempts.delete(ip);
+  }
+
   app.get('/auth/login', (req, res) => {
-    const state = crypto.randomBytes(16).toString('hex');
-    req.session.oauthState = state;
-    res.redirect(getAuthorizeUrl({ clientId, redirectUri: getRedirectUri(req), state }));
+    const state = loginState(req.ip);
+    if (state.lockedUntil > Date.now()) {
+      const retrySeconds = Math.ceil((state.lockedUntil - Date.now()) / 1000);
+      return res.redirect(`/?auth_error=cooldown&retry=${retrySeconds}`);
+    }
+
+    const oauthState = crypto.randomBytes(16).toString('hex');
+    req.session.oauthState = oauthState;
+    res.redirect(getAuthorizeUrl({ clientId, redirectUri: getRedirectUri(req), state: oauthState }));
   });
 
   app.get('/auth/callback', async (req, res) => {
     const { code, state } = req.query;
     if (!code || !state || state !== req.session?.oauthState) {
-      return res.status(400).send('Invalid or expired login attempt. Please try logging in again.');
+      recordLoginFailure(req.ip);
+      return res.redirect('/?auth_error=state');
     }
     req.session.oauthState = null;
 
@@ -190,10 +226,12 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
         : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(user.id) >> 22n) % 6}.png`;
       req.session.accessToken = token.access_token;
 
+      clearLoginFailures(req.ip);
       res.redirect('/dashboard');
     } catch (err) {
       console.error('OAuth callback failed:', err.message);
-      res.status(500).send('Login failed. Please try again.');
+      recordLoginFailure(req.ip);
+      res.redirect('/?auth_error=failed');
     }
   });
 
