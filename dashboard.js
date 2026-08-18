@@ -34,6 +34,7 @@ const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const aiAgent = require('./aiAgent');
+const customCommands = require('./customCommands');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -322,11 +323,43 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.get('/api/categories', requireGuildAccess, (req, res) => {
+    // Every category is listed regardless of whether it has any channels in it
+    // yet — a brand-new, empty category is a completely valid destination for
+    // a ticket panel or a channel about to be created.
     const categories = req.guild.channels.cache
       .filter((c) => c.type === ChannelType.GuildCategory)
-      .map((c) => ({ id: c.id, name: c.name }))
+      .map((c) => ({ id: c.id, name: c.name, channelCount: c.children?.cache.size ?? 0 }))
       .sort((a, b) => a.name.localeCompare(b.name));
     res.json(categories);
+  });
+
+  app.post('/api/categories', requireGuildAccess, async (req, res) => {
+    const { name } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+    try {
+      const category = await req.guild.channels.create({ name: name.trim(), type: ChannelType.GuildCategory });
+      audit(req.guildId, 'Created category', category.name);
+      res.json({ id: category.id, name: category.name, channelCount: 0 });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/channels', requireGuildAccess, async (req, res) => {
+    const { name, categoryId, type } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+    if (categoryId && !req.guild.channels.cache.has(categoryId)) return res.status(400).json({ error: 'That category is not in this server' });
+    try {
+      const channel = await req.guild.channels.create({
+        name: name.trim(),
+        type: type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
+        parent: categoryId || undefined,
+      });
+      audit(req.guildId, 'Created channel', `#${channel.name}`);
+      res.json({ id: channel.id, name: channel.name, parent: channel.parent?.name || null });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/activity', requireGuildAccess, (req, res) => {
@@ -930,6 +963,28 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     res.json({ ok: true });
   });
 
+  // ---------- Custom commands (per-server, admin/AI-defined) ----------
+
+  app.get('/api/custom-commands', requireGuildAccess, (req, res) => {
+    res.json(customCommands.list(req.guildId));
+  });
+
+  app.post('/api/custom-commands', requireGuildAccess, (req, res) => {
+    try {
+      const list = customCommands.add(req.guildId, req.body || {});
+      audit(req.guildId, 'Added custom command', (req.body || {}).name);
+      res.json(list);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/custom-commands/:name', requireGuildAccess, (req, res) => {
+    const list = customCommands.remove(req.guildId, req.params.name);
+    audit(req.guildId, 'Removed custom command', req.params.name);
+    res.json(list);
+  });
+
   // ---------- Per-server settings ----------
 
   app.get('/api/guild-config', requireGuildAccess, (req, res) => {
@@ -1119,13 +1174,19 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
   const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
+  // Client-facing errors here are deliberately generic — the AI agent talks
+  // to Mistral's API and to this server's own routes, and neither of those
+  // error messages is something a normal dashboard user should have to
+  // parse. Full detail always goes to the server log via console.error;
+  // the browser only ever gets a flat "failed, try again".
   app.post('/api/ai/chat', requireGuildAccess, async (req, res) => {
     if (!MISTRAL_API_KEY) {
-      return res.status(503).json({ error: 'The AI agent is not configured on this server (missing API key).' });
+      console.error('AI agent used without MISTRAL_API_KEY configured');
+      return res.status(503).json({ failed: true });
     }
     const { message, history } = req.body || {};
     if (!message || typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'message is required' });
+      return res.status(400).json({ failed: true });
     }
     const safeHistory = Array.isArray(history)
       ? history
@@ -1149,7 +1210,26 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       res.json(result);
     } catch (err) {
       console.error('AI agent error:', err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ failed: true });
+    }
+  });
+
+  // A sensitive tool call the agent proposed but did not execute — the user
+  // approved it explicitly in the chat UI, so run it now, for real, through
+  // the exact same guild-scoped path as everything else.
+  app.post('/api/ai/confirm', requireGuildAccess, async (req, res) => {
+    const { tool, args } = req.body || {};
+    if (!tool || typeof tool !== 'string') return res.status(400).json({ failed: true });
+    const toolDef = aiAgent.TOOLS.find((t) => t.name === tool);
+    if (!toolDef || !toolDef.sensitive) return res.status(400).json({ failed: true });
+
+    try {
+      const result = await aiAgent.confirmAction({ port, cookieHeader: req.headers.cookie, guildId: req.guildId, tool, args });
+      audit(req.guildId, 'AI agent (confirmed)', `${tool} — ${result.ok ? 'ok' : 'failed'}`);
+      res.json(result);
+    } catch (err) {
+      console.error('AI agent confirm error:', err.message);
+      res.status(500).json({ failed: true });
     }
   });
 

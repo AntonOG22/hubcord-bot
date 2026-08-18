@@ -6,6 +6,8 @@
 const commandConfig = require('./commandConfig');
 const { commands } = require('./commandRegistry');
 const rateCommands = require('./rateCommands');
+const customCommands = require('./customCommands');
+const { EmbedBuilder } = require('discord.js');
 
 const commandMap = new Map();
 for (const c of commands) {
@@ -29,11 +31,30 @@ function setupCommandHandler(client, ctx) {
       // Not a static command — check if it's a per-server custom "rate" command
       // (e.g. !rateaura), configurable from the dashboard's Fun tab.
       const rateType = rateCommands.matchCommandName(message.guild.id, commandName);
-      if (!rateType) return;
+      if (rateType) {
+        try {
+          await rateCommands.runRate(message, args, rateType);
+        } catch (err) {
+          await message.reply(`❌ ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
+        }
+        return;
+      }
+
+      // Still not matched — check per-server custom commands (dashboard/AI-created).
+      const custom = customCommands.find(message.guild.id, commandName);
+      if (!custom) return;
       try {
-        await rateCommands.runRate(message, args, rateType);
+        if (custom.embedTitle) {
+          const embed = new EmbedBuilder()
+            .setTitle(custom.embedTitle)
+            .setDescription(custom.response)
+            .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e);
+          await message.reply({ embeds: [embed] });
+        } else {
+          await message.reply(custom.response);
+        }
       } catch (err) {
-        await message.reply(`❌ ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
+        console.error(`Custom command "${custom.name}" failed:`, err);
       }
       return;
     }

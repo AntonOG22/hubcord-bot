@@ -22,9 +22,10 @@ const SYSTEM_PROMPT = `You are the built-in assistant inside the Emerald Discord
 
 Rules:
 - Respond in English by default. If the person writes to you in another language, reply in that language instead — you're fluent in all of them.
-- You can do anything the tools below let you do: create and post ticket panels, role panels, and reaction roles; send messages, announcements, polls, and DMs; kick, ban, timeout, warn, and manage roles; configure automod, verification, tickets, and server settings; run giveaways, reminders, sticky messages, auto-responses; and more. If there's a tool for it, you're allowed to just do it — don't ask for confirmation on routine requests, just act and then report what you did.
-- Discord channels, roles, and members are referred to by name in conversation, never by ID. Always resolve a name to an ID first using list_channels / list_categories / list_roles / list_members before calling a tool that needs an ID — never guess or invent an ID.
-- If a request is ambiguous (e.g. two channels with a similar name, or a destructive action like ban/kick/purge on an unclear target), ask a short clarifying question instead of guessing.
+- You can do anything the tools below let you do: create and post ticket panels, role panels, and reaction roles; create channels and categories; create custom commands; send messages, announcements, polls, and DMs; kick, ban, timeout, warn, and manage roles; configure automod, verification, tickets, and server settings; run giveaways, reminders, sticky messages, auto-responses; and more. If there's a tool for it, you're allowed to just do it — don't ask for confirmation on routine, low-risk requests, just act and then report what you did.
+- Discord channels, roles, and members are referred to by name in conversation, never by ID. Always resolve a name to an ID first using list_channels / list_categories / list_roles / list_members before calling a tool that needs an ID — never guess or invent an ID. If no suitable channel or category exists yet, create one with create_channel / create_category instead of asking the user to make it themselves.
+- A few tools are marked as sensitive (ban, kick, purge, lockdown, bulk role changes). Those are never executed automatically, no matter what — the system will always hold them for the user to explicitly confirm in the UI first, so just call the tool as normal and let the system handle asking for confirmation.
+- If a request is ambiguous (e.g. two channels with a similar name), ask a short clarifying question instead of guessing.
 - You only ever act on this one server — you have no visibility into, or effect on, any other server the bot is in.
 - After taking action, confirm briefly and concretely what happened (what was created/changed/sent), not a generic "done".
 - If a tool call fails, explain what went wrong in plain language, don't just repeat the raw error.`;
@@ -69,6 +70,30 @@ const TOOLS = [
     path: '/api/guild-config',
     description: 'Read this server\'s current settings (counting channel, auto-role, mod-log channel, announcements channel, ping roles).',
     parameters: { type: 'object', properties: {}, required: [] },
+  },
+
+  // ---- Channel / category creation ----
+  {
+    name: 'create_category',
+    method: 'POST',
+    path: '/api/categories',
+    description: 'Create a new, empty channel category. Use this when the user wants tickets/channels organized somewhere that doesn\'t exist yet.',
+    parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+  {
+    name: 'create_channel',
+    method: 'POST',
+    path: '/api/channels',
+    description: 'Create a new text or voice channel, optionally inside a category.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        categoryId: { type: 'string', description: 'Category to create it under (optional)' },
+        type: { type: 'string', enum: ['text', 'voice'] },
+      },
+      required: ['name'],
+    },
   },
 
   // ---- Messaging ----
@@ -123,6 +148,8 @@ const TOOLS = [
     name: 'kick_member',
     method: 'POST',
     path: '/api/moderation/kick',
+    sensitive: true,
+    describe: (a) => `Kick <@${a.userId}>${a.reason ? ` (reason: ${a.reason})` : ''}`,
     description: 'Kick a member from the server.',
     parameters: { type: 'object', properties: { userId: { type: 'string' }, reason: { type: 'string' } }, required: ['userId'] },
   },
@@ -130,6 +157,8 @@ const TOOLS = [
     name: 'ban_member',
     method: 'POST',
     path: '/api/moderation/ban',
+    sensitive: true,
+    describe: (a) => `Ban user ID ${a.userId}${a.reason ? ` (reason: ${a.reason})` : ''}`,
     description: 'Ban a member (or a raw user ID not currently in the server) from the server.',
     parameters: { type: 'object', properties: { userId: { type: 'string' }, reason: { type: 'string' }, deleteMessageDays: { type: 'number', description: 'Days of their recent messages to delete, 0-7' } }, required: ['userId'] },
   },
@@ -179,6 +208,8 @@ const TOOLS = [
     name: 'bulk_role_assign',
     method: 'POST',
     path: '/api/members/bulk-role',
+    sensitive: true,
+    describe: (a) => `Give role ID ${a.roleId} to ${a.filter || 'all'} members`,
     description: 'Give a role to many members at once, optionally filtered to only bots or only humans.',
     parameters: { type: 'object', properties: { roleId: { type: 'string' }, filter: { type: 'string', enum: ['all', 'bots', 'humans'] } }, required: ['roleId'] },
   },
@@ -186,6 +217,8 @@ const TOOLS = [
     name: 'purge_messages',
     method: 'POST',
     path: '/api/purge',
+    sensitive: true,
+    describe: (a) => `Delete ${a.amount} recent messages in <#${a.channelId}>`,
     description: 'Bulk-delete recent messages (max 100, and only ones under 14 days old) in a channel.',
     parameters: { type: 'object', properties: { channelId: { type: 'string' }, amount: { type: 'number' } }, required: ['channelId', 'amount'] },
   },
@@ -200,6 +233,8 @@ const TOOLS = [
     name: 'set_lockdown',
     method: 'POST',
     path: '/api/lockdown',
+    sensitive: true,
+    describe: (a) => (a.locked ? 'Lock down every text channel for @everyone' : 'Lift the server-wide lockdown'),
     description: 'Lock down (or lift lockdown on) every text channel for @everyone — an emergency raid response.',
     parameters: { type: 'object', properties: { locked: { type: 'boolean' } }, required: ['locked'] },
   },
@@ -209,16 +244,17 @@ const TOOLS = [
     name: 'update_automod_settings',
     method: 'POST',
     path: '/api/automod',
-    description: 'Update auto-moderation settings. Only include the fields being changed.',
+    description: 'Update auto-moderation settings. Only include the fields being changed. Staff (Manage Messages) are always exempt.',
     parameters: {
       type: 'object',
       properties: {
-        enabled: { type: 'boolean' },
-        blockInvites: { type: 'boolean' },
-        blockLinks: { type: 'boolean' },
-        antiSpam: { type: 'boolean' },
-        bannedWords: { type: 'array', items: { type: 'string' } },
-        minAccountAgeDays: { type: 'number' },
+        linkFilter: { type: 'boolean', description: 'Block links not on the whitelist' },
+        linkWhitelist: { type: 'array', items: { type: 'string' }, description: 'Domains allowed even with linkFilter on' },
+        inviteFilter: { type: 'boolean', description: 'Block Discord invite links' },
+        capsFilter: { type: 'boolean', description: 'Block excessive-caps messages' },
+        mentionSpamFilter: { type: 'boolean', description: 'Block messages that mention many users at once' },
+        duplicateSpamFilter: { type: 'boolean', description: 'Block the same message repeated quickly' },
+        accountAgeGateDays: { type: 'number', description: 'Minimum Discord account age to post, in days. 0 = off' },
       },
       required: [],
     },
@@ -248,8 +284,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         supportRoleId: { type: 'string' },
-        closedCategoryId: { type: 'string' },
-        channelNameFormat: { type: 'string', description: 'Use {username} and {count}' },
+        closedCategoryChannelId: { type: 'string', description: 'Category closed tickets get moved into' },
+        ticketNameFormat: { type: 'string', description: 'Use {username} and {count}' },
         welcomeMessage: { type: 'string', description: 'Use {user}' },
         maxOpenPerUser: { type: 'number' },
         autoCloseHours: { type: 'number', description: '0 = off' },
@@ -269,7 +305,7 @@ const TOOLS = [
         title: { type: 'string', description: 'Embed title' },
         description: { type: 'string', description: 'Embed description' },
         color: { type: 'string', description: 'Hex color like #17e88f' },
-        categoryId: { type: 'string', description: 'Category where new ticket channels are created' },
+        categoryChannelId: { type: 'string', description: 'Category where new ticket channels get created — resolve with list_categories, or make one first with create_category if none fits' },
       },
       required: ['name'],
     },
@@ -380,18 +416,48 @@ const TOOLS = [
     description: 'Create a new custom !rate-style command (e.g. !rateaura) that gives a random 1-100% rating.',
     parameters: { type: 'object', properties: { label: { type: 'string' }, emoji: { type: 'string' } }, required: ['label'] },
   },
+  {
+    name: 'create_custom_command',
+    method: 'POST',
+    path: '/api/custom-commands',
+    description: 'Create a brand new chat command (e.g. !rules) with any fixed text response the user wants. Distinct from add_autoresponse: this is an exact command, not a trigger word matched inside any message.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Command name without the prefix, letters/numbers/-/_ only' },
+        response: { type: 'string', description: 'What the bot replies with' },
+        embedTitle: { type: 'string', description: 'Optional — if set, the response is posted as an embed with this title' },
+        color: { type: 'string', description: 'Optional hex color for the embed' },
+      },
+      required: ['name', 'response'],
+    },
+  },
+  {
+    name: 'remove_custom_command',
+    method: 'DELETE',
+    path: '/api/custom-commands/:name',
+    description: 'Delete a custom command.',
+    parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+  {
+    name: 'list_custom_commands',
+    method: 'GET',
+    path: '/api/custom-commands',
+    description: 'List every custom command currently defined on this server.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
 
   // ---- Server / commands config ----
   {
     name: 'update_guild_config',
     method: 'POST',
     path: '/api/guild-config',
-    description: 'Update server settings — counting game channel, auto-role on join, mod-log channel, announcements channel, giveaway/announcement ping roles. Only include fields being changed. Field names: countingChannelId, autoRoleId, modLogsChannelId, announcementsChannelId, giveawayPingRoleId, announcementPingRoleId.',
+    description: 'Update server settings — counting game channel, role auto-given on join, mod-log channel, announcements channel, giveaway/announcement ping roles. Only include fields being changed.',
     parameters: {
       type: 'object',
       properties: {
         countingChannelId: { type: 'string' },
-        autoRoleId: { type: 'string' },
+        memberRoleId: { type: 'string', description: 'Role automatically given to new members on join' },
         modLogsChannelId: { type: 'string' },
         announcementsChannelId: { type: 'string' },
         giveawayPingRoleId: { type: 'string' },
@@ -507,6 +573,7 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
   ];
 
   const actions = [];
+  const pendingActions = [];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const resp = await fetch(MISTRAL_URL, {
@@ -523,16 +590,17 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
-      throw new Error(`Mistral API error ${resp.status}: ${errText.slice(0, 300)}`);
+      console.error(`Mistral API error ${resp.status}: ${errText.slice(0, 300)}`);
+      throw new Error('AI agent request failed');
     }
 
     const data = await resp.json();
     const message = data.choices?.[0]?.message;
-    if (!message) throw new Error('Mistral returned no message');
+    if (!message) throw new Error('AI agent returned no response');
     messages.push(message);
 
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      return { reply: message.content || '(no response)', actions };
+      return { reply: message.content || '(no response)', actions, pendingActions };
     }
 
     for (const call of message.tool_calls) {
@@ -542,6 +610,27 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
         args = JSON.parse(call.function.arguments || '{}');
       } catch {
         // leave args empty, the tool call below will likely fail validation server-side
+      }
+
+      // Sensitive tools are never auto-executed, no matter what the model
+      // decides — the call is held for the user to explicitly approve in the
+      // UI (see /api/ai/confirm). The model just gets told it's pending so it
+      // can wrap up its reply accordingly.
+      if (tool && tool.sensitive) {
+        const pending = {
+          id: call.id,
+          tool: tool.name,
+          args,
+          description: tool.describe ? tool.describe(args) : `${tool.name}(${JSON.stringify(args)})`,
+        };
+        pendingActions.push(pending);
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          name: call.function.name,
+          content: JSON.stringify({ status: 'awaiting_user_confirmation' }),
+        });
+        continue;
       }
 
       let resultBody;
@@ -579,7 +668,30 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
   return {
     reply: "I took several steps on this but hit my per-turn action limit — tell me to continue if there's more to do.",
     actions,
+    pendingActions,
   };
 }
 
-module.exports = { runAgentTurn, TOOLS };
+// Executes exactly one previously-proposed sensitive tool call, after the
+// user has explicitly approved it in the UI. Re-validates the tool name and
+// re-runs it through the same internal loopback + requireGuildAccess path as
+// everything else — nothing here trusts the client's word that it's safe.
+async function confirmAction({ port, cookieHeader, guildId, tool: toolName, args }) {
+  const tool = TOOLS.find((t) => t.name === toolName);
+  if (!tool) throw new Error('Unknown tool');
+  const argsForRequest = { ...(args || {}) };
+  const resolvedPath = buildPath(tool.path, argsForRequest);
+  const isGet = tool.method === 'GET';
+  const query = isGet && Object.keys(argsForRequest).length ? `?${new URLSearchParams(argsForRequest).toString()}` : '';
+  const dispatched = await callInternalApi({
+    port,
+    method: tool.method,
+    path: resolvedPath + query,
+    guildId,
+    cookieHeader,
+    body: isGet ? null : argsForRequest,
+  });
+  return { tool: toolName, status: dispatched.status, ok: dispatched.status >= 200 && dispatched.status < 300, body: dispatched.body };
+}
+
+module.exports = { runAgentTurn, confirmAction, TOOLS };

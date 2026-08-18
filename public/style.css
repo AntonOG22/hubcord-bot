@@ -1587,6 +1587,28 @@ input[type="radio"]:checked::after {
   font-style: italic;
 }
 
+.ai-msg-confirm {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--gold-soft);
+  border: 1px solid rgba(223, 174, 77, 0.35);
+}
+
+.ai-confirm-text {
+  margin-bottom: 8px;
+}
+
+.ai-confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-confirm-buttons button {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
 .ai-form {
   display: flex;
   gap: 8px;

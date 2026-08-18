@@ -421,6 +421,20 @@
             <div id="cmd-list" class="scroll-list"></div>
           </section>
 
+          <section class="card wide">
+            <h2>Custom Commands</h2>
+            <p class="muted small">Make your own command that replies with fixed text — e.g. <code>!rules</code>. Different from auto-responses: this only fires on an exact command, not a word anywhere in a message.</p>
+            <div class="row">
+              <input id="customcmd-name" type="text" placeholder="Command name (no prefix), e.g. rules" />
+            </div>
+            <div class="row">
+              <input id="customcmd-response" type="text" placeholder="Response text" />
+              <button id="customcmd-add-btn" class="primary-button">Add</button>
+            </div>
+            <p id="customcmd-feedback" class="feedback-text"></p>
+            <div id="customcmd-list" class="scroll-list"></div>
+          </section>
+
         </div>
       </section>
 

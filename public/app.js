@@ -422,6 +422,7 @@ function init() {
   document.getElementById('ticket-panel-add-btn').addEventListener('click', addTicketPanel);
   document.getElementById('ticket-post-btn').addEventListener('click', postTicketPanel);
   document.getElementById('rate-command-add-btn').addEventListener('click', addRateCommand);
+  document.getElementById('customcmd-add-btn').addEventListener('click', addCustomCommand);
   document.getElementById('rp-add-btn').addEventListener('click', addRolePanel);
 
   document.querySelectorAll('[data-template]').forEach((btn) => {
@@ -456,6 +457,7 @@ function refreshEverything() {
   refreshOpenTickets();
   refreshClosedTickets();
   refreshRateCommands();
+  refreshCustomCommands();
   refreshRolePanels();
   refreshGuildSettings();
   refreshTicketConfig();
@@ -1457,6 +1459,64 @@ async function removeRateCommand(key) {
   refreshAuditLog();
 }
 
+// ---------- Custom commands ----------
+
+async function refreshCustomCommands() {
+  const res = await api('/api/custom-commands');
+  if (!res.ok) return;
+  const list = await res.json();
+  const el = document.getElementById('customcmd-list');
+
+  if (list.length === 0) {
+    el.innerHTML = '<span class="empty-hint">No custom commands yet.</span>';
+    return;
+  }
+
+  el.innerHTML = list
+    .map(
+      (c) => `
+    <div class="list-row">
+      <div class="list-main">
+        <div class="list-title"><code>!${escapeHtml(c.name)}</code></div>
+        <div class="list-sub">${escapeHtml(c.response.slice(0, 80))}${c.response.length > 80 ? '…' : ''}</div>
+      </div>
+      <div class="list-actions">
+        <button class="danger-button" data-customcmd-remove="${escapeHtml(c.name)}">Remove</button>
+      </div>
+    </div>`
+    )
+    .join('');
+
+  document.querySelectorAll('[data-customcmd-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => removeCustomCommand(btn.dataset.customcmdRemove));
+  });
+}
+
+async function addCustomCommand() {
+  const feedback = document.getElementById('customcmd-feedback');
+  const name = document.getElementById('customcmd-name').value.trim();
+  const response = document.getElementById('customcmd-response').value.trim();
+  if (!name || !response) return setFeedback(feedback, 'Give it a name and a response.', false);
+
+  const res = await api('/api/custom-commands', { method: 'POST', body: JSON.stringify({ name, response }) });
+  if (res.ok) {
+    document.getElementById('customcmd-name').value = '';
+    document.getElementById('customcmd-response').value = '';
+    setFeedback(feedback, 'Added!', true);
+    refreshCustomCommands();
+    refreshAuditLog();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
+  }
+}
+
+async function removeCustomCommand(name) {
+  await api(`/api/custom-commands/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  refreshCustomCommands();
+  refreshAuditLog();
+}
+
 // ---------- Role panels ----------
 
 async function refreshRolePanels() {
@@ -2028,15 +2088,103 @@ function addAiMessage(role, text) {
   return div;
 }
 
+// Every action chip names the concrete thing that happened, not just a raw
+// tool identifier — e.g. "Created ticket panel" rather than "create_ticket_panel" —
+// so a normal user can actually tell the work was done correctly without
+// needing to know what the tools are called internally.
+const AI_ACTION_LABELS = {
+  create_ticket_panel: 'Created ticket panel',
+  post_ticket_panel: 'Posted ticket panel',
+  update_ticket_config: 'Updated ticket settings',
+  close_ticket: 'Closed ticket',
+  create_role_panel: 'Created role panel',
+  add_role_to_panel: 'Added role to panel',
+  post_role_panel: 'Posted role panel',
+  create_reaction_role: 'Created reaction role',
+  create_category: 'Created category',
+  create_channel: 'Created channel',
+  send_message: 'Sent message',
+  send_announcement_template: 'Sent announcement',
+  create_poll: 'Created poll',
+  send_dm: 'Sent DM',
+  timeout_member: 'Timed out member',
+  warn_member: 'Warned member',
+  clear_warnings: 'Cleared warnings',
+  add_role_to_member: 'Added role',
+  remove_role_from_member: 'Removed role',
+  set_slowmode: 'Set slowmode',
+  update_automod_settings: 'Updated automod settings',
+  set_verification_gate: 'Updated verification gate',
+  post_verification_button: 'Posted verification button',
+  set_sticky_message: 'Set sticky message',
+  add_autoresponse: 'Added auto-response',
+  start_giveaway: 'Started giveaway',
+  schedule_reminder: 'Scheduled reminder',
+  add_rate_command: 'Added rate command',
+  create_custom_command: 'Created custom command',
+  remove_custom_command: 'Removed custom command',
+  update_guild_config: 'Updated server settings',
+  set_command_prefix: 'Changed command prefix',
+  toggle_command: 'Toggled command',
+  reset_counting_game: 'Reset counting game',
+  post_fun_content: 'Posted fun content',
+};
+
+function aiActionLabel(toolName) {
+  return AI_ACTION_LABELS[toolName] || toolName.replace(/_/g, ' ');
+}
+
 function addAiActions(actions) {
   if (!actions || !actions.length) return;
   const wrap = document.createElement('div');
   wrap.className = 'ai-actions';
   wrap.innerHTML = actions
-    .map((a) => `<span class="ai-action-chip ${a.ok ? 'ok' : 'fail'}">${a.ok ? '✓' : '✕'} ${escapeHtml(a.tool)}</span>`)
+    .map((a) => `<span class="ai-action-chip ${a.ok ? 'ok' : 'fail'}">${a.ok ? '✓' : '✕'} ${escapeHtml(aiActionLabel(a.tool))}</span>`)
     .join('');
   aiMessages.appendChild(wrap);
   aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+// Sensitive tool calls (ban, kick, purge, lockdown, bulk role changes) come
+// back as *proposals*, never already executed — this renders each one with
+// its own Confirm/Cancel buttons. Nothing happens until the user clicks
+// Confirm, which is a fresh, separately-authorized request to the server;
+// this UI is just a prompt, not the thing enforcing the pause.
+function addAiPendingActions(pendingActions) {
+  if (!pendingActions || !pendingActions.length) return;
+  pendingActions.forEach((pending) => {
+    const div = document.createElement('div');
+    div.className = 'ai-msg ai-msg-confirm';
+    div.innerHTML = `
+      <div class="ai-confirm-text">⚠️ ${escapeHtml(pending.description)}</div>
+      <div class="ai-confirm-buttons">
+        <button class="danger-button ai-confirm-yes">Confirm</button>
+        <button class="secondary-button ai-confirm-no">Cancel</button>
+      </div>`;
+    aiMessages.appendChild(div);
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+
+    div.querySelector('.ai-confirm-yes').addEventListener('click', async () => {
+      div.querySelectorAll('button').forEach((b) => (b.disabled = true));
+      try {
+        const res = await api('/api/ai/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ tool: pending.tool, args: pending.args }),
+        });
+        const data = await res.json();
+        div.querySelector('.ai-confirm-buttons').innerHTML = res.ok && data.ok
+          ? `<span class="ai-action-chip ok">✓ ${escapeHtml(aiActionLabel(pending.tool))}</span>`
+          : `<span class="ai-action-chip fail">✕ Failed — try again</span>`;
+        if (res.ok && data.ok) refreshEverything();
+      } catch {
+        div.querySelector('.ai-confirm-buttons').innerHTML = `<span class="ai-action-chip fail">✕ Failed — try again</span>`;
+      }
+    });
+
+    div.querySelector('.ai-confirm-no').addEventListener('click', () => {
+      div.querySelector('.ai-confirm-buttons').innerHTML = `<span class="ai-action-chip fail">Cancelled</span>`;
+    });
+  });
 }
 
 aiForm.addEventListener('submit', async (e) => {
@@ -2058,18 +2206,20 @@ aiForm.addEventListener('submit', async (e) => {
       body: JSON.stringify({ message: text, history: aiHistory }),
     });
     thinking.remove();
-    const data = await res.json();
     if (!res.ok) {
-      addAiMessage('error', data.error || 'Something went wrong.');
+      addAiMessage('error', 'Failed — try again.');
       return;
     }
+    const data = await res.json();
     addAiMessage('assistant', data.reply);
     addAiActions(data.actions);
+    addAiPendingActions(data.pendingActions);
+    if (data.actions && data.actions.length) refreshEverything();
     aiHistory.push({ role: 'user', content: text }, { role: 'assistant', content: data.reply });
     if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
   } catch (err) {
     thinking.remove();
-    addAiMessage('error', 'Could not reach the AI agent.');
+    addAiMessage('error', 'Failed — try again.');
   } finally {
     aiBusy = false;
     aiSendBtn.disabled = false;
