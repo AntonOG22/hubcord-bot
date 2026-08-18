@@ -86,10 +86,26 @@ function renderPicker() {
 }
 
 async function inviteBotTo(guildId) {
-  const res = await api(`/api/invite-url?guildId=${guildId}`);
-  if (!res.ok) return;
-  const { url } = await res.json();
-  window.open(url, '_blank', 'noopener');
+  // Open the tab synchronously, inside the click's user-activation window —
+  // opening it only after an `await` gets silently popup-blocked in most browsers.
+  const tab = window.open('', '_blank', 'noopener');
+  try {
+    const res = await api(`/api/invite-url?guildId=${guildId}`);
+    if (!res.ok) {
+      if (tab) tab.close();
+      return;
+    }
+    const { url } = await res.json();
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      // Popup blocker still got us (e.g. blocked even the blank tab) — fall back
+      // to navigating the current tab so the click always does *something* visible.
+      window.location.href = url;
+    }
+  } catch {
+    if (tab) tab.close();
+  }
 }
 
 function enterDashboard(guildId) {
