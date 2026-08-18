@@ -690,6 +690,28 @@ button {
   margin: 0 0 4px;
   font-size: 1.02rem;
   letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card h2::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--diamond);
+  box-shadow: 0 0 8px 1px rgba(23, 232, 143, 0.7);
+  flex-shrink: 0;
+}
+
+/* Every card follows the same "title, then one-line muted description"
+   pattern — turning that description into a visual divider makes each
+   card scannable as header-then-controls instead of one dense block. */
+.card h2 + p {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 /* ---------- Forms ---------- */
@@ -730,13 +752,23 @@ textarea {
   font-family: var(--font-body);
   font-size: 0.88rem;
   resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--border-soft);
+  background: var(--surface-3);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--diamond);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 3px var(--diamond-soft);
 }
 
 input[type="color"] {
@@ -747,6 +779,109 @@ input[type="color"] {
   border: 1px solid var(--border);
   background: var(--surface-2);
   cursor: pointer;
+}
+
+/* ---------- Custom select ----------
+   Native <select> popups can't be restyled cross-browser, but the closed
+   control is fully ours: no more OS-default arrow/box, a hand-drawn emerald
+   chevron instead, and the same glow language as everything else. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 38px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2393a89c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2317e88f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+select option {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ---------- Custom date/time field ----------
+   The native calendar/clock popup itself is OS-drawn and out of CSS's
+   reach in every browser, but the field chrome and its trigger icon are
+   fully re-skinned so it never looks like a stock browser control. */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px;
+  filter: invert(70%) sepia(40%) saturate(900%) hue-rotate(90deg) brightness(1.1);
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(85%) sepia(60%) saturate(900%) hue-rotate(90deg) brightness(1.3);
+  background: var(--diamond-soft);
+}
+
+/* ---------- Custom checkbox / radio ---------- */
+
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+input[type="checkbox"] {
+  border-radius: 5px;
+}
+
+input[type="radio"] {
+  border-radius: 50%;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background: var(--diamond);
+  border-color: var(--diamond);
+  box-shadow: 0 0 12px -2px rgba(23, 232, 143, 0.7);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid #04201c;
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg);
+}
+
+input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: #04201c;
 }
 
 .primary-button,
@@ -1501,6 +1636,26 @@ input[type="color"] {
   color: var(--text-faint);
   font-size: 0.78rem;
   border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.landing-footer-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.landing-footer-links a:hover {
+  color: var(--diamond-bright);
+  text-decoration: underline;
 }
 
 /* ---------- Guild picker ---------- */
