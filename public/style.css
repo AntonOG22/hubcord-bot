@@ -180,38 +180,59 @@ button {
 
 /* ---------- App shell: sidebar + content ---------- */
 
+/* ==========================================================================
+   App shell — top bar + horizontal tab strip
+   Deliberately NOT a left sidebar: everything about navigation lives in
+   one slim strip under the header instead, so the page reads top-to-
+   bottom like a normal web app rather than a game launcher with a rail
+   of icons down the side.
+   ========================================================================== */
+
 #app-screen {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
-.sidebar {
-  width: 232px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border-soft);
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.sidebar-brand {
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 28px;
+  height: 58px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.appbar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 20px;
-  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
 }
 
 .brand-mark {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 7px;
   background: var(--accent-soft);
   flex-shrink: 0;
@@ -219,148 +240,97 @@ button {
 
 .brand-name {
   font-weight: 700;
-  font-size: 0.96rem;
+  font-size: 0.92rem;
   letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 .brand-sub {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
-.server-switcher {
-  padding: 14px 20px 16px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.server-switcher .field-label {
-  margin-top: 0;
-}
-
-.server-switcher select {
-  width: 100%;
-  margin-bottom: 0;
-}
-
-.side-nav {
-  flex: 1;
-  padding: 10px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow-y: auto;
-}
-
-.nav-group-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-faint);
-  padding: 14px 10px 6px;
-}
-
-.nav-group-label:first-child {
-  padding-top: 6px;
-}
-
-.nav-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: none;
-  border-left: 2px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
-}
-
-.nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
+.appbar-switcher {
   flex-shrink: 0;
-  color: var(--text-faint);
-  transition: color 0.1s ease;
+  width: 200px;
 }
 
-.nav-icon svg {
+.appbar-switcher select {
   width: 100%;
+}
+
+.appbar-vitals {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
   height: 100%;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
-.nav-button:hover {
-  background: var(--surface-2);
+.vital {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  border-left: 1px solid var(--border-soft);
+  height: 28px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.vital:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.vital-label {
+  color: var(--text-faint);
+}
+
+.vital .vital-value {
   color: var(--text);
+  font-weight: 600;
 }
 
-.nav-button:hover .nav-icon {
-  color: var(--text);
+.vital .dot {
+  width: 7px;
+  height: 7px;
 }
 
-.nav-button.active {
-  background: var(--surface-2);
-  color: var(--text);
-  border-left-color: var(--accent);
-}
-
-.nav-button.active .nav-icon {
-  color: var(--accent);
-}
-
-.sidebar-footer {
+.appbar-user {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border-soft);
-  position: relative;
+  flex-shrink: 0;
 }
 
-.sidebar-footer .dot {
-  position: absolute;
-  top: 10px;
-  left: 38px;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--surface);
-}
-
-.sidebar-bot-info {
+.appbar-user-info {
   overflow: hidden;
 }
 
-.sidebar-bot-tag {
+.appbar-username {
   font-size: 0.8rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 140px;
 }
 
-.sidebar-bot-sub {
+.appbar-user-links {
   font-size: 0.7rem;
-  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
 }
 
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid var(--border);
   flex-shrink: 0;
@@ -383,49 +353,73 @@ button {
   background: var(--red);
 }
 
-/* ---------- Vitals strip ---------- */
+/* ---------- Tab strip ---------- */
 
-.vitals-strip {
+.tab-strip {
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 0 32px;
-  height: 44px;
+  gap: 2px;
+  padding: 0 22px;
   background: var(--surface);
   border-bottom: 1px solid var(--border-soft);
+  overflow-x: auto;
   position: sticky;
-  top: 0;
+  top: 58px;
   z-index: 5;
-  font-size: 0.8rem;
 }
 
-.vital {
+.nav-button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 18px;
-  border-right: 1px solid var(--border-soft);
-  height: 100%;
+  gap: 7px;
+  padding: 12px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--text-muted);
+  font-size: 0.83rem;
+  font-weight: 500;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.1s ease, border-color 0.1s ease;
 }
 
-.vital:first-child {
-  padding-left: 0;
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: color 0.1s ease;
 }
 
-.vital:last-child {
-  border-right: none;
+.nav-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.vital .vital-value {
+.nav-button:hover {
   color: var(--text);
-  font-weight: 600;
 }
 
-.vital .dot {
-  width: 7px;
-  height: 7px;
+.nav-button:hover .nav-icon {
+  color: var(--text);
+}
+
+.nav-button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.nav-button.active .nav-icon {
+  color: var(--accent);
 }
 
 /* ---------- Content area ---------- */
@@ -1008,40 +1002,38 @@ input[type="radio"]:checked::after {
   }
 }
 
-@media (max-width: 720px) {
-  #app-screen {
-    flex-direction: column;
-  }
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .server-switcher {
-    flex: 1;
-    min-width: 160px;
-    border-bottom: none;
-  }
-  .side-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 10px 12px;
-    width: 100%;
-    max-height: 150px;
-    overflow-y: auto;
-  }
-  .nav-group-label {
+@media (max-width: 900px) {
+  .appbar-vitals {
     display: none;
   }
-  .sidebar-footer {
+}
+
+@media (max-width: 720px) {
+  .appbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    gap: 10px;
+    row-gap: 10px;
+  }
+  .appbar-brand {
+    order: 1;
+  }
+  .appbar-user {
+    order: 2;
+    margin-left: auto;
+  }
+  .appbar-switcher {
+    order: 3;
     width: 100%;
   }
-  .vitals-strip {
-    padding: 0 16px;
-    overflow-x: auto;
+  .tab-strip {
+    /* The appbar's own height becomes variable once it wraps to two rows on
+       mobile, so a fixed sticky offset here would misalign — simplest fix
+       is to let the tab strip scroll away with the page instead of the
+       app bar, which stays pinned on its own. */
+    position: static;
+    padding: 0 12px;
   }
   .content {
     padding: 20px 16px 40px;

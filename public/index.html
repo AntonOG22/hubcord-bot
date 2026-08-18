@@ -107,8 +107,8 @@
   <!-- ===================== MAIN DASHBOARD ===================== -->
   <div id="app-screen" class="screen hidden">
 
-    <aside class="sidebar">
-      <div class="sidebar-brand">
+    <header class="appbar">
+      <div class="appbar-brand">
         <span class="brand-mark">💚</span>
         <div>
           <div class="brand-name">Emarald</div>
@@ -116,66 +116,54 @@
         </div>
       </div>
 
-      <div class="server-switcher">
-        <label class="field-label" for="guild-select">Server</label>
+      <div class="appbar-switcher">
+        <label class="sr-only" for="guild-select">Server</label>
         <select id="guild-select"></select>
       </div>
 
-      <nav class="side-nav">
-        <span class="nav-group-label">Dashboard</span>
-        <button class="nav-button active" data-tab="overview"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></span>Overview</button>
-
-        <span class="nav-group-label">Trust &amp; Safety</span>
-        <button class="nav-button" data-tab="moderation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/></svg></span>Moderation</button>
-        <button class="nav-button" data-tab="security"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span>Security</button>
-        <button class="nav-button" data-tab="commands"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>Commands</button>
-
-        <span class="nav-group-label">Support</span>
-        <button class="nav-button" data-tab="tickets"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 000-4V8z"/><path d="M9 6v12" stroke-dasharray="2 2"/></svg></span>Tickets</button>
-
-        <span class="nav-group-label">Communication</span>
-        <button class="nav-button" data-tab="messaging"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5z"/></svg></span>Messaging</button>
-        <button class="nav-button" data-tab="automation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.6 6.4"/><path d="M20 4v7h-7"/></svg></span>Automation</button>
-        <button class="nav-button" data-tab="fun"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg></span>Fun</button>
-
-        <span class="nav-group-label">World</span>
-        <button class="nav-button" data-tab="leveling"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z"/></svg></span>Leveling</button>
-        <button class="nav-button" data-tab="insights"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg></span>Insights</button>
-
-        <span class="nav-group-label">System</span>
-        <button class="nav-button" data-tab="server"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="7.5" cy="7" r="0.6" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></span>Server</button>
-      </nav>
-
-      <div class="sidebar-footer">
-        <img id="topbar-avatar" class="avatar" alt="" />
-        <div class="sidebar-bot-info">
-          <div class="sidebar-bot-tag" id="topbar-username">—</div>
-          <div class="sidebar-bot-sub"><a href="#" id="switch-server-link" class="topbar-switch-btn" style="margin-right:8px">Switch server</a><a href="/auth/logout" class="topbar-logout">Log out</a></div>
-        </div>
-      </div>
-    </aside>
-
-    <div class="content-col">
-
-      <div class="vitals-strip">
+      <div class="appbar-vitals">
         <div class="vital">
           <span class="dot pulse connected" id="conn-dot"></span>
-          <span>Bot</span>
           <span class="vital-value" id="vitals-bot-tag">—</span>
         </div>
         <div class="vital">
-          <span>Ping</span>
+          <span class="vital-label">Ping</span>
           <span class="vital-value" id="vitals-ping">—</span>
         </div>
         <div class="vital">
-          <span>Members</span>
+          <span class="vital-label">Members</span>
           <span class="vital-value" id="vitals-members">—</span>
         </div>
         <div class="vital">
-          <span>Server</span>
+          <span class="vital-label">Server</span>
           <span class="vital-value" id="vitals-guild">—</span>
         </div>
       </div>
+
+      <div class="appbar-user">
+        <img id="topbar-avatar" class="avatar" alt="" />
+        <div class="appbar-user-info">
+          <div class="appbar-username" id="topbar-username">—</div>
+          <div class="appbar-user-links"><a href="#" id="switch-server-link" class="topbar-switch-btn">Switch server</a><a href="/auth/logout" class="topbar-logout">Log out</a></div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tab-strip">
+      <button class="nav-button active" data-tab="overview"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></span>Overview</button>
+      <button class="nav-button" data-tab="moderation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/></svg></span>Moderation</button>
+      <button class="nav-button" data-tab="security"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span>Security</button>
+      <button class="nav-button" data-tab="commands"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>Commands</button>
+      <button class="nav-button" data-tab="tickets"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 000-4V8z"/><path d="M9 6v12" stroke-dasharray="2 2"/></svg></span>Tickets</button>
+      <button class="nav-button" data-tab="messaging"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5z"/></svg></span>Messaging</button>
+      <button class="nav-button" data-tab="automation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.6 6.4"/><path d="M20 4v7h-7"/></svg></span>Automation</button>
+      <button class="nav-button" data-tab="fun"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg></span>Fun</button>
+      <button class="nav-button" data-tab="leveling"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z"/></svg></span>Leveling</button>
+      <button class="nav-button" data-tab="insights"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg></span>Insights</button>
+      <button class="nav-button" data-tab="server"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="7.5" cy="7" r="0.6" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></span>Server</button>
+    </nav>
+
+    <div class="content-col">
 
     <main class="content">
 
