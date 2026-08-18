@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hubcord Control Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===================== LANDING (public, no login) ===================== -->
+  <div id="landing-screen" class="screen">
+    <div class="login-bg-grid"></div>
+
+    <nav class="landing-nav">
+      <div class="landing-brand"><span class="brand-mark">🧊</span>Hubcord</div>
+      <a href="/auth/login" class="discord-login-btn" style="padding:9px 18px; font-size:0.85rem;">Login with Discord</a>
+    </nav>
+
+    <div class="landing-hero">
+      <span class="landing-eyebrow">Multi-server bot control panel</span>
+      <h1>Run every server you moderate from one dashboard.</h1>
+      <p>Moderation, tickets, leveling, automod, giveaways, custom commands, and more —
+        log in with Discord and manage only the servers you actually own or admin.
+        No shared passwords, nothing anyone else can see.</p>
+      <a href="/auth/login" class="discord-login-btn">
+        <span>🔐</span> Login with Discord
+      </a>
+    </div>
+
+    <div class="landing-features">
+      <div class="landing-feature">
+        <div class="icon">🛡️</div>
+        <h3>Real Discord login</h3>
+        <p>You sign in with your own Discord account. We only ever show servers where Discord itself confirms you have Manage Server.</p>
+      </div>
+      <div class="landing-feature">
+        <div class="icon">🎫</div>
+        <h3>Full moderation suite</h3>
+        <p>Tickets, automod, anti-raid, warnings, leveling, counting, custom commands, role panels, and a live command builder.</p>
+      </div>
+      <div class="landing-feature">
+        <div class="icon">➕</div>
+        <h3>Add it to any server</h3>
+        <p>Don't have the bot yet? Invite it to a new server in one click, right from your server list.</p>
+      </div>
+    </div>
+
+    <div class="landing-footer">Hubcord — not affiliated with Discord Inc.</div>
+  </div>
+
+  <!-- ===================== SERVER PICKER ===================== -->
+  <div id="picker-screen" class="screen hidden">
+    <div class="login-bg-grid"></div>
+    <div class="picker-card">
+      <div class="picker-head">
+        <div>
+          <span class="page-eyebrow">Hubcord</span>
+          <h1 style="margin:0;">Choose a server</h1>
+        </div>
+        <div class="picker-user">
+          <img id="picker-avatar" alt="" />
+          <div>
+            <div class="picker-user-name" id="picker-username">—</div>
+            <a href="/auth/logout" class="topbar-logout">Log out</a>
+          </div>
+        </div>
+      </div>
+
+      <p class="muted small" id="picker-with-bot-label">Servers you manage where Hubcord is already in:</p>
+      <div id="picker-with-bot" class="guild-grid"></div>
+
+      <p class="muted small" id="picker-without-bot-label" style="margin-top:10px">Servers you manage where Hubcord isn't added yet:</p>
+      <div id="picker-without-bot" class="guild-grid"></div>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN DASHBOARD ===================== -->
+  <div id="app-screen" class="screen hidden">
+
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark">🧊</span>
+        <div>
+          <div class="brand-name">Hubcord</div>
+          <div class="brand-sub">Control Panel</div>
+        </div>
+      </div>
+
+      <div class="server-switcher">
+        <label class="field-label" for="guild-select">Server</label>
+        <select id="guild-select"></select>
+      </div>
+
+      <nav class="side-nav">
+        <span class="nav-group-label">Dashboard</span>
+        <button class="nav-button active" data-tab="overview"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></span>Overview</button>
+
+        <span class="nav-group-label">Trust &amp; Safety</span>
+        <button class="nav-button" data-tab="moderation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/></svg></span>Moderation</button>
+        <button class="nav-button" data-tab="security"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span>Security</button>
+        <button class="nav-button" data-tab="commands"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>Commands</button>
+
+        <span class="nav-group-label">Support</span>
+        <button class="nav-button" data-tab="tickets"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 000-4V8z"/><path d="M9 6v12" stroke-dasharray="2 2"/></svg></span>Tickets</button>
+
+        <span class="nav-group-label">Communication</span>
+        <button class="nav-button" data-tab="messaging"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5z"/></svg></span>Messaging</button>
+        <button class="nav-button" data-tab="automation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.6 6.4"/><path d="M20 4v7h-7"/></svg></span>Automation</button>
+        <button class="nav-button" data-tab="fun"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg></span>Fun</button>
+
+        <span class="nav-group-label">World</span>
+        <button class="nav-button" data-tab="leveling"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z"/></svg></span>Leveling</button>
+        <button class="nav-button" data-tab="insights"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg></span>Insights</button>
+
+        <span class="nav-group-label">System</span>
+        <button class="nav-button" data-tab="server"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="7.5" cy="7" r="0.6" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></span>Server</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <img id="topbar-avatar" class="avatar" alt="" />
+        <div class="sidebar-bot-info">
+          <div class="sidebar-bot-tag" id="topbar-username">—</div>
+          <div class="sidebar-bot-sub"><a href="#" id="switch-server-link" class="topbar-switch-btn" style="margin-right:8px">Switch server</a><a href="/auth/logout" class="topbar-logout">Log out</a></div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="content-col">
+
+      <div class="vitals-strip">
+        <div class="vital">
+          <span class="dot pulse connected" id="conn-dot"></span>
+          <span>Bot</span>
+          <span class="vital-value" id="vitals-bot-tag">—</span>
+        </div>
+        <div class="vital">
+          <span>Ping</span>
+          <span class="vital-value" id="vitals-ping">—</span>
+        </div>
+        <div class="vital">
+          <span>Members</span>
+          <span class="vital-value" id="vitals-members">—</span>
+        </div>
+        <div class="vital">
+          <span>Server</span>
+          <span class="vital-value" id="vitals-guild">—</span>
+        </div>
+      </div>
+
+    <main class="content">
+
+      <!-- ===================== OVERVIEW ===================== -->
+      <section id="tab-overview" class="tab-panel">
+        <div class="page-head">
+          <span class="page-eyebrow">Dashboard</span>
+          <h1>Overview</h1>
+          <p class="muted">Live status of the bot on this server.</p>
+        </div>
+
+        <div class="grid">
+          <section class="card stat-card accent-mc">
+            <span class="stat-label">Bot Ping</span>
+            <div class="stat-value"><span id="bot-ping">—</span> <span class="unit">ms</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Members</span>
+            <div class="stat-value"><span id="member-count">—</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Dashboard Uptime</span>
+            <div class="stat-value"><span id="bot-uptime">—</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Boost Tier</span>
+            <div class="stat-value" id="boost-tier-quick">—</div>
+          </section>
+
+          <section class="card wide">
+            <h2>Server Info</h2>
+            <div id="guild-info" class="guild-info">Loading…</div>
+          </section>
+
+          <section class="card wide">
+            <h2>Recent Activity</h2>
+            <p class="muted small">Latest joins &amp; leaves</p>
+            <div id="activity-feed" class="scroll-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ===================== MODERATION ===================== -->
+      <section id="tab-moderation" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Trust &amp; Safety</span>
+          <h1>Moderation</h1>
+          <p class="muted">Manage members, warnings, and channel controls.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Members</h2>
+            <p class="muted small">Search by username, or leave empty to list recent members.</p>
+            <div class="row">
+              <input id="member-search" type="text" placeholder="Search member…" />
+              <button id="member-search-btn" class="secondary-button">Search</button>
+            </div>
+            <div id="member-list" class="scroll-list tall"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Warnings</h2>
+            <p class="muted small">Issue a warning, or view a member's history. 3 warnings auto-times-out for 30 minutes.</p>
+            <div class="row">
+              <input id="warn-user-id" type="text" placeholder="User ID" />
+              <input id="warn-reason" type="text" placeholder="Reason" />
+              <button id="warn-btn" class="danger-button">Warn</button>
+            </div>
+            <p id="warn-feedback" class="feedback-text"></p>
+            <div id="warned-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card">
+            <h2>Purge Messages</h2>
+            <label class="field-label" for="purge-channel">Channel</label>
+            <select id="purge-channel"></select>
+            <label class="field-label" for="purge-amount">Amount (1–100)</label>
+            <input id="purge-amount" type="number" min="1" max="100" value="10" />
+            <button id="purge-btn" class="danger-button">Delete Messages</button>
+            <p id="purge-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card">
+            <h2>Slowmode</h2>
+            <label class="field-label" for="slowmode-channel">Channel</label>
+            <select id="slowmode-channel"></select>
+            <label class="field-label" for="slowmode-seconds">Seconds (0 = off)</label>
+            <input id="slowmode-seconds" type="number" min="0" max="21600" value="0" />
+            <button id="slowmode-btn" class="secondary-button">Apply Slowmode</button>
+            <p id="slowmode-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Banned Users</h2>
+            <div id="ban-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Roles</h2>
+            <div id="role-list" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== MESSAGING ===================== -->
+      <section id="tab-messaging" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Communication</span>
+          <h1>Messaging</h1>
+          <p class="muted">Send announcements, polls, and direct messages as the bot.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Send a Message</h2>
+            <p class="muted small">Post as the bot into any text channel on the server.</p>
+
+            <label class="field-label" for="channel-select">Channel</label>
+            <select id="channel-select"></select>
+
+            <label class="field-label" for="title-input">Embed title <span class="muted small">(optional — plain message if left empty)</span></label>
+            <input id="title-input" type="text" placeholder="e.g. Server Update" />
+
+            <label class="field-label" for="color-input">Embed color</label>
+            <input id="color-input" type="color" value="#3fe8d6" />
+
+            <label class="field-label" for="message-input">Message</label>
+            <textarea id="message-input" rows="5" placeholder="Write your message here…"></textarea>
+
+            <button id="send-button" class="primary-button">Send</button>
+            <p id="send-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card">
+            <h2>Announcement Templates</h2>
+            <p class="muted small">One-click posts to your configured announcements channel. For a fully custom announcement with a ping role, use <code>!annoucment &lt;title&gt; | &lt;text&gt;</code> in Discord.</p>
+            <div class="template-buttons">
+              <button class="secondary-button" data-template="maintenance">🛠️ Maintenance</button>
+              <button class="secondary-button" data-template="event">🎉 Event Starting</button>
+            </div>
+            <p id="template-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Direct Message a Member</h2>
+            <p class="muted small">Sends a DM through the bot to a member of this server.</p>
+            <div class="row">
+              <input id="dm-user-id" type="text" placeholder="Member's User ID…" />
+            </div>
+            <textarea id="dm-message" rows="3" placeholder="Write a message…" style="margin-top:12px"></textarea>
+            <button id="dm-button" class="primary-button">Send DM</button>
+            <p id="dm-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Create a Poll</h2>
+            <label class="field-label" for="poll-channel">Channel</label>
+            <select id="poll-channel"></select>
+            <label class="field-label" for="poll-question">Question</label>
+            <input id="poll-question" type="text" placeholder="What should we build next?" />
+            <label class="field-label">Options (2–10)</label>
+            <div id="poll-options">
+              <input class="poll-option" type="text" placeholder="Option 1" />
+              <input class="poll-option" type="text" placeholder="Option 2" />
+            </div>
+            <div class="row">
+              <button id="poll-add-option" class="secondary-button" type="button">+ Add Option</button>
+              <button id="poll-create-btn" class="primary-button" type="button">Create Poll</button>
+            </div>
+            <p id="poll-feedback" class="feedback-text"></p>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== SECURITY ===================== -->
+      <section id="tab-security" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Trust &amp; Safety</span>
+          <h1>Security</h1>
+          <p class="muted">Auto-moderation, raid protection, and lockdown controls.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Auto-Moderation</h2>
+            <p class="muted small">Staff (Manage Messages) are always exempt.</p>
+            <div id="automod-toggles" class="toggle-list"></div>
+            <label class="field-label" for="automod-age-gate">New-account age gate (days, 0 = off)</label>
+            <input id="automod-age-gate" type="number" min="0" value="0" />
+            <button id="automod-save-btn" class="primary-button">Save Settings</button>
+            <p id="automod-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card">
+            <h2>Server Lockdown</h2>
+            <p class="muted small">Instantly disables sending messages in every text channel for @everyone.</p>
+            <button id="lockdown-on-btn" class="danger-button">🔒 Lock Down Server</button>
+            <button id="lockdown-off-btn" class="secondary-button">🔓 Lift Lockdown</button>
+            <p id="lockdown-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card">
+            <h2>Verification Gate</h2>
+            <p class="muted small">When on, new members must click a button before getting the Member role.</p>
+            <label class="field-label" for="verification-toggle">Enabled</label>
+            <select id="verification-toggle">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <button id="verification-save-btn" class="secondary-button">Save</button>
+            <label class="field-label" for="verification-channel">Post verify button in</label>
+            <select id="verification-channel"></select>
+            <button id="verification-post-btn" class="primary-button">Post Verify Button</button>
+            <p id="verification-feedback" class="feedback-text"></p>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== COMMANDS ===================== -->
+      <section id="tab-commands" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Trust &amp; Safety</span>
+          <h1>Commands</h1>
+          <p class="muted">Configure the chat-command prefix and manage all prefixed commands. Each command is only usable by members whose Discord role actually has the required permission.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Prefix</h2>
+            <p class="muted small">Used to trigger commands in any channel, e.g. <code>!kick @user</code>.</p>
+            <div class="row">
+              <input id="cmd-prefix-input" type="text" maxlength="3" placeholder="!" style="max-width:100px" />
+              <button id="cmd-prefix-save-btn" class="primary-button">Save Prefix</button>
+            </div>
+            <p id="cmd-prefix-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Command List</h2>
+            <p class="muted small" id="cmd-count-label">Loading…</p>
+            <input id="cmd-search" type="text" placeholder="Search commands…" style="margin-bottom:10px" />
+            <div id="cmd-list" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== TICKETS ===================== -->
+      <section id="tab-tickets" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Support</span>
+          <h1>Tickets</h1>
+          <p class="muted">A fully configurable support-ticket system: panels, staff role, auto-close, and live ticket management — all editable here.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card stat-card">
+            <span class="stat-label">Open Tickets</span>
+            <div class="stat-value"><span id="ticket-stat-open">—</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Closed Total</span>
+            <div class="stat-value"><span id="ticket-stat-closed">—</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Avg. Resolution</span>
+            <div class="stat-value"><span id="ticket-stat-avg">—</span> <span class="unit">min</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">All-Time Total</span>
+            <div class="stat-value"><span id="ticket-stat-total">—</span></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Global Settings</h2>
+            <p class="muted small">Shared across every panel. Closing a ticket never posts anywhere — it hides the channel from whoever opened it and moves it into the category below, where staff can delete, transcript, or reopen it.</p>
+
+            <label class="field-label" for="ticket-support-role">Support role (added to every ticket)</label>
+            <select id="ticket-support-role"><option value="">— none —</option></select>
+
+            <label class="field-label" for="ticket-closed-category">Closed tickets category</label>
+            <select id="ticket-closed-category"><option value="">— none —</option></select>
+
+            <label class="field-label" for="ticket-name-format">Channel name format <span class="muted small">(use {username} and {count})</span></label>
+            <input id="ticket-name-format" type="text" placeholder="ticket-{username}" />
+
+            <label class="field-label" for="ticket-welcome-message">Welcome message inside new tickets <span class="muted small">(use {user})</span></label>
+            <textarea id="ticket-welcome-message" rows="3"></textarea>
+
+            <div class="row">
+              <div style="flex:1">
+                <label class="field-label" for="ticket-max-open">Max open tickets per user</label>
+                <input id="ticket-max-open" type="number" min="1" max="20" value="1" />
+              </div>
+              <div style="flex:1">
+                <label class="field-label" for="ticket-autoclose">Auto-close after inactivity (hours, 0 = off)</label>
+                <input id="ticket-autoclose" type="number" min="0" max="720" value="0" />
+              </div>
+            </div>
+
+            <button id="ticket-config-save-btn" class="primary-button">Save Global Settings</button>
+            <p id="ticket-config-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Ticket Panels</h2>
+            <p class="muted small">Each panel is its own embed + button, postable to any channel, filing tickets into its own category — e.g. a "Bug Reports" panel and a separate "Support" panel.</p>
+            <div id="ticket-panels-list" class="scroll-list"></div>
+
+            <label class="field-label" for="ticket-panel-name" style="margin-top:20px">New panel</label>
+            <div class="row">
+              <input id="ticket-panel-name" type="text" placeholder="Internal name, e.g. Bug Reports" />
+              <input id="ticket-panel-button-label" type="text" placeholder="Button label, e.g. Report a Bug" />
+              <input id="ticket-panel-button-emoji" type="text" placeholder="Emoji" style="max-width:90px" />
+            </div>
+            <label class="field-label" for="ticket-panel-title">Embed title</label>
+            <input id="ticket-panel-title" type="text" placeholder="🐛 Bug Reports" />
+            <label class="field-label" for="ticket-panel-description">Embed description</label>
+            <textarea id="ticket-panel-description" rows="2" placeholder="Found a bug? Click below to open a private ticket with our team."></textarea>
+            <label class="field-label" for="ticket-panel-color">Embed color</label>
+            <input id="ticket-panel-color" type="color" value="#3fe8d6" />
+            <label class="field-label" for="ticket-panel-category">Ticket category (where channels are created)</label>
+            <select id="ticket-panel-category"><option value="">— none —</option></select>
+            <button id="ticket-panel-add-btn" class="primary-button">Add Panel</button>
+            <p id="ticket-panel-add-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Post a Panel</h2>
+            <p class="muted small">Sends a panel's embed + button to a channel — members click it there to open a ticket.</p>
+            <label class="field-label" for="ticket-post-panel-select">Panel</label>
+            <select id="ticket-post-panel-select"></select>
+            <label class="field-label" for="ticket-post-channel">Channel</label>
+            <select id="ticket-post-channel"></select>
+            <button id="ticket-post-btn" class="primary-button">Post Panel</button>
+            <p id="ticket-post-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Open Tickets</h2>
+            <div id="ticket-open-list" class="scroll-list tall"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Closed Tickets</h2>
+            <div id="ticket-closed-list" class="scroll-list tall"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== FUN ===================== -->
+      <section id="tab-fun" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Communication</span>
+          <h1>Fun</h1>
+          <p class="muted">Quick fun content, custom rate commands, and self-assign roles.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Quick Fun</h2>
+            <label class="field-label" for="fun-channel">Channel</label>
+            <select id="fun-channel"></select>
+            <label class="field-label" for="fun-target">Compliment target user ID (optional)</label>
+            <input id="fun-target" type="text" placeholder="User ID…" />
+            <div class="template-buttons">
+              <button class="secondary-button" data-fun="dice">🎲 Roll Dice</button>
+              <button class="secondary-button" data-fun="coinflip">🪙 Coin Flip</button>
+              <button class="secondary-button" data-fun="quote">💬 Quote of the Day</button>
+              <button class="secondary-button" data-fun="trivia">🧠 Trivia</button>
+              <button class="secondary-button" data-fun="wyr">🤔 Would You Rather</button>
+              <button class="secondary-button" data-fun="compliment">💖 Compliment</button>
+            </div>
+            <p id="fun-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Custom Rate Commands</h2>
+            <p class="muted small">Each one becomes a chat command like <code>!rateaura @user</code> — picks a random 1-100% and replies to whoever ran it.</p>
+            <div id="rate-commands-list" class="scroll-list"></div>
+            <div class="row">
+              <input id="rate-command-label" type="text" placeholder="Name, e.g. Aura, Rizz, Sigma…" />
+              <input id="rate-command-emoji" type="text" placeholder="Emoji" style="max-width:90px" />
+              <button id="rate-command-add-btn" class="secondary-button">Add Rate Command</button>
+            </div>
+            <p id="rate-command-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Role Panels</h2>
+            <p class="muted small">Button-based self-assign roles — e.g. a "Giveaway Notifications" panel where clicking the button toggles a role on/off. Each panel can hold up to 5 role-buttons.</p>
+            <div id="role-panels-list" class="scroll-list"></div>
+
+            <label class="field-label" for="rp-new-name" style="margin-top:20px">New panel</label>
+            <div class="row">
+              <input id="rp-new-name" type="text" placeholder="Name, e.g. Giveaway Notifications" />
+              <input id="rp-new-color" type="color" value="#3fe8d6" style="max-width:60px" />
+            </div>
+            <label class="field-label" for="rp-new-title">Embed title</label>
+            <input id="rp-new-title" type="text" placeholder="🔔 Notification Roles" />
+            <label class="field-label" for="rp-new-description">Embed description</label>
+            <textarea id="rp-new-description" rows="2" placeholder="Click a button below to toggle a notification role on or off."></textarea>
+            <button id="rp-add-btn" class="secondary-button">Add Panel</button>
+            <p id="rp-add-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Reaction Roles</h2>
+            <p class="muted small">Posts a message — reacting with the emoji gives the role, un-reacting removes it.</p>
+            <label class="field-label" for="rr-channel">Channel</label>
+            <select id="rr-channel"></select>
+            <div class="row">
+              <input id="rr-text" type="text" placeholder="Message text…" />
+              <input id="rr-emoji" type="text" placeholder="Emoji (e.g. 🎮)" style="max-width:100px" />
+              <select id="rr-role"></select>
+            </div>
+            <button id="rr-btn" class="primary-button">Create</button>
+            <p id="rr-feedback" class="feedback-text"></p>
+            <div id="rr-list" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== INSIGHTS ===================== -->
+      <section id="tab-insights" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">World</span>
+          <h1>Insights</h1>
+          <p class="muted">Activity stats across the server.</p>
+        </div>
+
+        <div class="grid">
+          <section class="card stat-card">
+            <span class="stat-label">New Members (7 days)</span>
+            <div class="stat-value"><span id="insights-new-members">—</span></div>
+          </section>
+
+          <section class="card stat-card">
+            <span class="stat-label">Dashboard Actions Total</span>
+            <div class="stat-value"><span id="insights-actions-total">—</span></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Most Active Channels (today)</h2>
+            <div id="insights-channels" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Most Active Members</h2>
+            <div id="insights-members" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Member Growth</h2>
+            <div id="insights-growth" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== AUTOMATION ===================== -->
+      <section id="tab-automation" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Communication</span>
+          <h1>Automation</h1>
+          <p class="muted">Sticky messages, auto-replies, giveaways, and scheduled reminders.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Sticky Messages</h2>
+            <p class="muted small">Keeps a message pinned to the bottom of a channel.</p>
+            <div class="row">
+              <select id="sticky-channel"></select>
+              <input id="sticky-text" type="text" placeholder="Sticky message text…" />
+              <button id="sticky-btn" class="primary-button">Set Sticky</button>
+            </div>
+            <p id="sticky-feedback" class="feedback-text"></p>
+            <div id="sticky-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Auto-Responses</h2>
+            <p class="muted small">Bot replies automatically when a message contains the trigger word.</p>
+            <div class="row">
+              <input id="autoresponse-trigger" type="text" placeholder="Trigger word…" />
+              <input id="autoresponse-reply" type="text" placeholder="Bot's reply…" />
+              <button id="autoresponse-btn" class="primary-button">Add</button>
+            </div>
+            <p id="autoresponse-feedback" class="feedback-text"></p>
+            <div id="autoresponse-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Giveaways</h2>
+            <label class="field-label" for="giveaway-channel">Channel</label>
+            <select id="giveaway-channel"></select>
+            <div class="row">
+              <input id="giveaway-prize" type="text" placeholder="Prize…" />
+              <input id="giveaway-duration" type="number" min="1" value="60" placeholder="Minutes" />
+              <input id="giveaway-winners" type="number" min="1" value="1" placeholder="Winners" />
+            </div>
+            <button id="giveaway-btn" class="primary-button">Start Giveaway</button>
+            <p id="giveaway-feedback" class="feedback-text"></p>
+            <div id="giveaway-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Reminders</h2>
+            <label class="field-label" for="reminder-channel">Channel</label>
+            <select id="reminder-channel"></select>
+            <div class="row">
+              <input id="reminder-text" type="text" placeholder="Reminder message…" />
+              <input id="reminder-time" type="datetime-local" />
+              <select id="reminder-repeat">
+                <option value="none">Once</option>
+                <option value="daily">Repeat daily</option>
+                <option value="weekly">Repeat weekly</option>
+              </select>
+            </div>
+            <button id="reminder-btn" class="primary-button">Schedule</button>
+            <p id="reminder-feedback" class="feedback-text"></p>
+            <div id="reminder-list" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== LEVELING ===================== -->
+      <section id="tab-leveling" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">World</span>
+          <h1>Leveling</h1>
+          <p class="muted">Members earn XP from chatting. Top 15 shown below.</p>
+        </div>
+
+        <div class="grid">
+          <section class="card wide">
+            <h2>Leaderboard</h2>
+            <div id="leaderboard-list" class="scroll-list tall"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ===================== SERVER ===================== -->
+      <section id="tab-server" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">System</span>
+          <h1>Server</h1>
+          <p class="muted">Per-server settings, counting game state, and full dashboard action history.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Server Settings</h2>
+            <p class="muted small">Channels/role used by counting, auto-role, mod-logs, and announcements — independent for each server.</p>
+
+            <label class="field-label" for="settings-counting-channel">Counting game channel</label>
+            <select id="settings-counting-channel"><option value="">— none —</option></select>
+
+            <label class="field-label" for="settings-member-role">Auto-role on join</label>
+            <select id="settings-member-role"><option value="">— none —</option></select>
+
+            <label class="field-label" for="settings-modlogs-channel">Mod-logs channel</label>
+            <select id="settings-modlogs-channel"><option value="">— none —</option></select>
+
+            <label class="field-label" for="settings-announcements-channel">Announcements channel</label>
+            <select id="settings-announcements-channel"><option value="">— none —</option></select>
+
+            <label class="field-label" for="settings-giveaway-ping-role">Giveaway ping role <span class="muted small">(pinged when a new giveaway starts)</span></label>
+            <select id="settings-giveaway-ping-role"><option value="">— none —</option></select>
+
+            <label class="field-label" for="settings-announcement-ping-role">Announcement ping role <span class="muted small">(pinged by !annoucment)</span></label>
+            <select id="settings-announcement-ping-role"><option value="">— none —</option></select>
+
+            <button id="settings-save-btn" class="primary-button">Save Server Settings</button>
+            <p id="settings-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card">
+            <h2>Counting Game</h2>
+            <div class="stat-value" id="counting-next">—</div>
+            <p class="muted small" id="counting-last">—</p>
+            <button id="counting-reset-btn" class="danger-button">Reset Game</button>
+            <p id="counting-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Dashboard Audit Log</h2>
+            <p class="muted small">Every moderation/messaging action taken from this panel, for this server only</p>
+            <div id="audit-log" class="scroll-list tall"></div>
+          </section>
+
+        </div>
+      </section>
+
+    </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
