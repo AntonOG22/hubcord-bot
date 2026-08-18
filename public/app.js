@@ -357,6 +357,7 @@ async function loadAdminOverview() {
   document.getElementById('admin-total-members').textContent = data.totalMembers.toLocaleString();
   document.getElementById('admin-bot-ping').textContent = data.botPing;
   document.getElementById('admin-bot-uptime').textContent = formatUptime(data.botUptimeMs);
+  document.getElementById('admin-watermark-toggle').checked = !!data.watermarkDisabled;
 
   const list = document.getElementById('admin-guild-list');
   list.innerHTML = data.guilds
@@ -388,6 +389,18 @@ async function loadAdminOverview() {
     });
   });
 }
+
+document.getElementById('admin-watermark-toggle').addEventListener('change', async (e) => {
+  const feedback = document.getElementById('admin-watermark-feedback');
+  const disabled = e.target.checked;
+  const res = await api('/api/admin/watermark', { method: 'POST', body: JSON.stringify({ disabled }) });
+  if (res.ok) {
+    setFeedback(feedback, disabled ? 'Watermark hidden bot-wide until you switch this back off.' : 'Watermark restored on every server.', true);
+  } else {
+    e.target.checked = !disabled; // revert the visual toggle, the server didn't accept it
+    setFeedback(feedback, 'Failed to save — try again.', false);
+  }
+});
 
 // ---------- Init ----------
 
@@ -2112,6 +2125,125 @@ async function refreshInsights() {
           .join('')
       : '<span class="empty-hint">Not enough history yet — check back tomorrow.</span>';
   }
+}
+
+// ---------- Feature search ----------
+//
+// A static index of "feature label -> which tab it lives on", searched
+// client-side with a plain substring match — no backend involved, this is
+// purely a faster way to find a setting than clicking through every tab.
+
+const FEATURE_INDEX = [
+  { label: 'Bot Ping', tab: 'overview' },
+  { label: 'Members count', tab: 'overview' },
+  { label: 'Dashboard Uptime', tab: 'overview' },
+  { label: 'Boost Tier', tab: 'overview' },
+  { label: 'Server Info', tab: 'overview' },
+  { label: 'Recent Activity', tab: 'overview' },
+
+  { label: 'Members (search/list)', tab: 'moderation' },
+  { label: 'Warnings', tab: 'moderation' },
+  { label: 'Purge Messages', tab: 'moderation' },
+  { label: 'Slowmode', tab: 'moderation' },
+  { label: 'Banned Users', tab: 'moderation' },
+  { label: 'Roles', tab: 'moderation' },
+
+  { label: 'Send a Message', tab: 'messaging' },
+  { label: 'Announcement Templates', tab: 'messaging' },
+  { label: 'Direct Message a Member', tab: 'messaging' },
+  { label: 'Create a Poll', tab: 'messaging' },
+
+  { label: 'Auto-Moderation', tab: 'security' },
+  { label: 'Server Lockdown', tab: 'security' },
+  { label: 'Verification Gate', tab: 'security' },
+
+  { label: 'Command Prefix', tab: 'commands' },
+  { label: 'Command List', tab: 'commands' },
+  { label: 'Custom Commands', tab: 'commands' },
+
+  { label: 'Ticket Global Settings', tab: 'tickets' },
+  { label: 'Ticket Panels', tab: 'tickets' },
+  { label: 'Post a Ticket Panel', tab: 'tickets' },
+  { label: 'Open Tickets', tab: 'tickets' },
+  { label: 'Closed Tickets', tab: 'tickets' },
+
+  { label: 'Quick Fun', tab: 'fun' },
+  { label: 'Custom Rate Commands', tab: 'fun' },
+  { label: 'Role Panels', tab: 'fun' },
+  { label: 'Reaction Roles', tab: 'fun' },
+
+  { label: 'New Members (7 days)', tab: 'insights' },
+  { label: 'Dashboard Actions Total', tab: 'insights' },
+  { label: 'Most Active Channels', tab: 'insights' },
+  { label: 'Most Active Members', tab: 'insights' },
+  { label: 'Member Growth', tab: 'insights' },
+
+  { label: 'Sticky Messages', tab: 'automation' },
+  { label: 'Auto-Responses', tab: 'automation' },
+  { label: 'Giveaways', tab: 'automation' },
+  { label: 'Reminders', tab: 'automation' },
+
+  { label: 'Leaderboard / XP', tab: 'leveling' },
+
+  { label: 'Server Settings', tab: 'server' },
+  { label: 'Bot Language', tab: 'server' },
+  { label: 'Counting Game', tab: 'server' },
+  { label: 'Dashboard Audit Log', tab: 'server' },
+
+  { label: 'Every Server (owner)', tab: 'admin' },
+  { label: 'Branding / Watermark toggle (owner)', tab: 'admin' },
+];
+
+const featureSearchInput = document.getElementById('feature-search-input');
+const featureSearchResults = document.getElementById('feature-search-results');
+
+function renderFeatureSearch(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    featureSearchResults.classList.add('hidden');
+    featureSearchResults.innerHTML = '';
+    return;
+  }
+
+  const matches = FEATURE_INDEX.filter((f) => f.label.toLowerCase().includes(q)).slice(0, 8);
+  featureSearchResults.innerHTML = matches.length
+    ? matches
+        .map(
+          (f) => `<div class="feature-search-result" data-search-tab="${f.tab}">
+            <span>${escapeHtml(f.label)}</span>
+            <span class="feature-search-result-tab">${escapeHtml(f.tab)}</span>
+          </div>`
+        )
+        .join('')
+    : '<div class="feature-search-empty">No matching feature.</div>';
+  featureSearchResults.classList.remove('hidden');
+
+  featureSearchResults.querySelectorAll('[data-search-tab]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const btn = document.querySelector(`.nav-button[data-tab="${row.dataset.searchTab}"]`);
+      if (btn && !btn.classList.contains('hidden')) btn.click();
+      featureSearchInput.value = '';
+      featureSearchResults.classList.add('hidden');
+      featureSearchInput.blur();
+    });
+  });
+}
+
+if (featureSearchInput) {
+  featureSearchInput.addEventListener('input', () => renderFeatureSearch(featureSearchInput.value));
+  featureSearchInput.addEventListener('focus', () => {
+    if (featureSearchInput.value.trim()) renderFeatureSearch(featureSearchInput.value);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.appbar-search')) featureSearchResults.classList.add('hidden');
+  });
+  featureSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      featureSearchInput.value = '';
+      featureSearchResults.classList.add('hidden');
+      featureSearchInput.blur();
+    }
+  });
 }
 
 // ---------- AI agent widget ----------

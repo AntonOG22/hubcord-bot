@@ -36,6 +36,7 @@ const rolePanels = require('./rolePanels');
 const aiAgent = require('./aiAgent');
 const customCommands = require('./customCommands');
 const { brandFooter } = require('./brand');
+const botSettings = require('./botSettings');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -311,8 +312,19 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       botUptimeMs: Date.now() - startedAt,
       totalGuilds: guilds.length,
       totalMembers: guilds.reduce((sum, g) => sum + (g.memberCount || 0), 0),
+      watermarkDisabled: botSettings.isWatermarkDisabled(),
       guilds,
     });
+  });
+
+  // Bot-wide, not per-server — turning this on removes the small "Emerald"
+  // footer from every embed the bot sends, for every server, until turned
+  // back off. Owner-only, same as everything else under /api/admin.
+  app.post('/api/admin/watermark', requireOwner, (req, res) => {
+    const { disabled } = req.body || {};
+    const settings = botSettings.setWatermarkDisabled(!!disabled);
+    audit('_global', 'Toggled bot watermark', settings.watermarkDisabled ? 'disabled' : 'enabled');
+    res.json(settings);
   });
 
   app.get('/api/invite-url', requireAuth, (req, res) => {

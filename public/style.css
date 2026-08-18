@@ -261,6 +261,83 @@ button {
   width: 100%;
 }
 
+.appbar-search {
+  position: relative;
+  flex-shrink: 0;
+  width: 220px;
+}
+
+.appbar-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.appbar-search input {
+  width: 100%;
+  padding: 7px 10px 7px 30px;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.feature-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.6);
+  z-index: 30;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.feature-search-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.feature-search-result:last-child {
+  border-bottom: none;
+}
+
+.feature-search-result:hover,
+.feature-search-result.active {
+  background: var(--surface-3);
+}
+
+.feature-search-result-tab {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.feature-search-empty {
+  padding: 12px;
+  font-size: 0.82rem;
+  color: var(--text-faint);
+}
+
+@media (max-width: 900px) {
+  .appbar-search {
+    display: none;
+  }
+}
+
 .appbar-vitals {
   display: flex;
   align-items: center;

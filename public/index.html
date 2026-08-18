@@ -127,6 +127,12 @@
         <select id="guild-select"></select>
       </div>
 
+      <div class="appbar-search">
+        <span class="appbar-search-icon">🔍</span>
+        <input type="text" id="feature-search-input" placeholder="Search features…" autocomplete="off" />
+        <div id="feature-search-results" class="feature-search-results hidden"></div>
+      </div>
+
       <div class="appbar-vitals">
         <div class="vital">
           <span class="dot pulse connected" id="conn-dot"></span>
@@ -835,6 +841,19 @@
           <section class="card stat-card">
             <span class="stat-label">Dashboard Uptime</span>
             <div class="stat-value" id="admin-bot-uptime">—</div>
+          </section>
+
+          <section class="card wide">
+            <h2>Branding</h2>
+            <p class="muted small">The small "Emerald" icon + tagline footer that appears on every embed the bot sends (ticket panels, giveaways, verification, etc). Bot-wide — this affects every server, not just one.</p>
+            <div class="toggle-row">
+              <span class="toggle-label">Hide watermark</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="admin-watermark-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <p id="admin-watermark-feedback" class="feedback-text"></p>
           </section>
 
           <section class="card wide">
