@@ -1402,7 +1402,7 @@ function renderRolePanels(panels, roles, channels) {
           p.roles
             .map(
               (r) => `<span class="role-chip" style="border-color:var(--border); color:var(--text);">${escapeHtml(r.emoji)} ${escapeHtml(r.label)}
-            <a href="#" data-rp-remove-role="${p.id}:${r.roleId}" style="margin-left:6px; color:var(--redstone);">×</a></span>`
+            <a href="#" data-rp-remove-role="${p.id}:${r.roleId}" style="margin-left:6px; color:var(--red);">×</a></span>`
             )
             .join('') || '<span class="muted small">No roles on this panel yet.</span>'
         }
