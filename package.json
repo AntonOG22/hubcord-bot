@@ -1,5 +1,5 @@
 {
-  "name": "emarald-bot",
+  "name": "emerald-bot",
   "version": "1.0.0",
   "description": "Public multi-tenant Discord bot dashboard — every server owner manages only their own servers via real Discord login.",
   "main": "index.js",
