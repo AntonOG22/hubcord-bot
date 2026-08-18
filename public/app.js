@@ -1994,4 +1994,86 @@ async function refreshInsights() {
   }
 }
 
+// ---------- AI agent widget ----------
+//
+// Everything here is UI plumbing only. The actual API key and every tool
+// call live entirely server-side (see aiAgent.js) — this code just sends
+// plain text to /api/ai/chat (guild-scoped like every other call, via the
+// api() helper's x-guild-id header) and renders whatever comes back.
+
+let aiHistory = [];
+let aiBusy = false;
+
+const aiToggleBtn = document.getElementById('ai-toggle-btn');
+const aiPanel = document.getElementById('ai-panel');
+const aiCloseBtn = document.getElementById('ai-close-btn');
+const aiForm = document.getElementById('ai-form');
+const aiInput = document.getElementById('ai-input');
+const aiMessages = document.getElementById('ai-messages');
+const aiSendBtn = document.getElementById('ai-send-btn');
+
+aiToggleBtn.addEventListener('click', () => {
+  aiPanel.classList.toggle('hidden');
+  if (!aiPanel.classList.contains('hidden')) aiInput.focus();
+});
+
+aiCloseBtn.addEventListener('click', () => aiPanel.classList.add('hidden'));
+
+function addAiMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `ai-msg ai-msg-${role}`;
+  div.textContent = text;
+  aiMessages.appendChild(div);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+  return div;
+}
+
+function addAiActions(actions) {
+  if (!actions || !actions.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-actions';
+  wrap.innerHTML = actions
+    .map((a) => `<span class="ai-action-chip ${a.ok ? 'ok' : 'fail'}">${a.ok ? '✓' : '✕'} ${escapeHtml(a.tool)}</span>`)
+    .join('');
+  aiMessages.appendChild(wrap);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+aiForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = aiInput.value.trim();
+  if (!text || aiBusy || !selectedGuildId) return;
+
+  addAiMessage('user', text);
+  aiInput.value = '';
+  aiBusy = true;
+  aiSendBtn.disabled = true;
+  const thinking = addAiMessage('thinking', 'Working on it…');
+  thinking.classList.add('ai-thinking');
+  thinking.classList.remove('ai-msg', 'ai-msg-thinking');
+
+  try {
+    const res = await api('/api/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text, history: aiHistory }),
+    });
+    thinking.remove();
+    const data = await res.json();
+    if (!res.ok) {
+      addAiMessage('error', data.error || 'Something went wrong.');
+      return;
+    }
+    addAiMessage('assistant', data.reply);
+    addAiActions(data.actions);
+    aiHistory.push({ role: 'user', content: text }, { role: 'assistant', content: data.reply });
+    if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+  } catch (err) {
+    thinking.remove();
+    addAiMessage('error', 'Could not reach the AI agent.');
+  } finally {
+    aiBusy = false;
+    aiSendBtn.disabled = false;
+  }
+});
+
 boot();

@@ -33,6 +33,7 @@ const guildConfig = require('./guildConfig');
 const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
+const aiAgent = require('./aiAgent');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -1105,6 +1106,49 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       audit(req.guildId, 'Posted role panel', `#${channelId}`);
       res.json({ ok: true });
     } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------- AI agent ----------
+  // Gated by requireGuildAccess just like every other route here — the agent
+  // can only be driven for a server the logged-in user actually manages (or
+  // by the owner), and every action it takes is re-checked by that same
+  // middleware a second time when the agent's tool calls loop back into this
+  // server. See aiAgent.js for the full explanation of that design.
+
+  const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+
+  app.post('/api/ai/chat', requireGuildAccess, async (req, res) => {
+    if (!MISTRAL_API_KEY) {
+      return res.status(503).json({ error: 'The AI agent is not configured on this server (missing API key).' });
+    }
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+          .slice(-20)
+      : [];
+
+    try {
+      const result = await aiAgent.runAgentTurn({
+        apiKey: MISTRAL_API_KEY,
+        port,
+        cookieHeader: req.headers.cookie,
+        guildId: req.guildId,
+        guildName: req.guild.name,
+        history: safeHistory,
+        userMessage: message.trim().slice(0, 2000),
+      });
+      if (result.actions.length) {
+        audit(req.guildId, 'AI agent', `"${message.trim().slice(0, 100)}" → ${result.actions.map((a) => a.tool).join(', ')}`);
+      }
+      res.json(result);
+    } catch (err) {
+      console.error('AI agent error:', err.message);
       res.status(500).json({ error: err.message });
     }
   });

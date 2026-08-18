@@ -820,6 +820,26 @@
 
     </main>
     </div>
+
+    <!-- ===================== AI AGENT WIDGET ===================== -->
+    <button id="ai-toggle-btn" class="ai-toggle-btn" title="Ask the Emerald AI agent">🤖</button>
+
+    <div id="ai-panel" class="ai-panel hidden">
+      <div class="ai-panel-head">
+        <div>
+          <div class="ai-panel-title">AI Agent</div>
+          <div class="ai-panel-sub">Can do anything you can do here — just ask.</div>
+        </div>
+        <button id="ai-close-btn" class="ai-close-btn" aria-label="Close">✕</button>
+      </div>
+      <div id="ai-messages" class="ai-messages">
+        <div class="ai-msg ai-msg-assistant">Hi! I can create panels, moderate members, change settings, send messages — anything this dashboard can do. What do you need?</div>
+      </div>
+      <form id="ai-form" class="ai-form">
+        <input id="ai-input" type="text" placeholder="e.g. create a ticket panel called Bug Reports…" autocomplete="off" />
+        <button type="submit" class="primary-button" id="ai-send-btn">Send</button>
+      </form>
+    </div>
   </div>
 
   <script src="app.js"></script>
