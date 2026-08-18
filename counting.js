@@ -3,6 +3,7 @@
 // original server) and gets its own independent count/state.
 const { makeGuildStore } = require('./guildStore');
 const guildConfig = require('./guildConfig');
+const { t } = require('./i18n');
 
 const store = makeGuildStore('counting-state.json', () => ({ currentCount: 1, lastUserId: null }));
 
@@ -23,7 +24,7 @@ function setupCounting(client) {
     if (message.author.id === state.lastUserId) {
       store.set(message.guild.id, { currentCount: 1, lastUserId: null });
       await message.react('❌').catch(() => {});
-      await message.channel.send(`❌ ${message.author}, you can't count twice in a row! Back to **1**.`);
+      await message.channel.send(t(message.guild.id, 'counting.doubleUp', { user: message.author.toString() }));
       return;
     }
 
@@ -33,7 +34,7 @@ function setupCounting(client) {
       store.set(message.guild.id, { currentCount: 1, lastUserId: null });
       await message.react('❌').catch(() => {});
       await message.channel.send(
-        `❌ ${message.author} broke the count! Expected **${expected}**, but got **${number}**. Back to **1**.`
+        t(message.guild.id, 'counting.wrongNumber', { user: message.author.toString(), expected, got: number })
       );
       return;
     }

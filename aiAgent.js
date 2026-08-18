@@ -452,7 +452,7 @@ const TOOLS = [
     name: 'update_guild_config',
     method: 'POST',
     path: '/api/guild-config',
-    description: 'Update server settings — counting game channel, role auto-given on join, mod-log channel, announcements channel, giveaway/announcement ping roles. Only include fields being changed.',
+    description: 'Update server settings — counting game channel, role auto-given on join, mod-log channel, announcements channel, giveaway/announcement ping roles, and the bot\'s reply language for this server.',
     parameters: {
       type: 'object',
       properties: {
@@ -462,6 +462,7 @@ const TOOLS = [
         announcementsChannelId: { type: 'string' },
         giveawayPingRoleId: { type: 'string' },
         announcementPingRoleId: { type: 'string' },
+        language: { type: 'string', enum: ['en', 'de', 'fr'], description: 'Language for the ticket system, verification gate, giveaways, and counting game messages' },
       },
       required: [],
     },

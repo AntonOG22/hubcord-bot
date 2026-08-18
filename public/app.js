@@ -1723,6 +1723,7 @@ async function refreshGuildSettings() {
   document.getElementById('settings-announcements-channel').value = config.announcementsChannelId || '';
   document.getElementById('settings-giveaway-ping-role').value = config.giveawayPingRoleId || '';
   document.getElementById('settings-announcement-ping-role').value = config.announcementPingRoleId || '';
+  document.getElementById('settings-language').value = config.language || 'en';
 }
 
 async function saveGuildSettings() {
@@ -1734,6 +1735,7 @@ async function saveGuildSettings() {
     announcementsChannelId: document.getElementById('settings-announcements-channel').value || null,
     giveawayPingRoleId: document.getElementById('settings-giveaway-ping-role').value || null,
     announcementPingRoleId: document.getElementById('settings-announcement-ping-role').value || null,
+    language: document.getElementById('settings-language').value || 'en',
   };
   const res = await api('/api/guild-config', { method: 'POST', body: JSON.stringify(patch) });
   if (res.ok) {

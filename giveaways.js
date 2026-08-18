@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const guildConfig = require('./guildConfig');
+const { t } = require('./i18n');
 
 const STATE_FILE = path.join(__dirname, 'giveaways-state.json');
 const GIVEAWAY_EMOJI = '🎉';
@@ -22,7 +23,7 @@ function save() {
   fs.writeFileSync(STATE_FILE, JSON.stringify(giveaways, null, 2));
 }
 
-function buildEmbed(prize, winnerCount, endsAt, ended, winners) {
+function buildEmbed(guildId, prize, winnerCount, endsAt, ended, winners) {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 Giveaway: ${prize}`)
     .setColor(ended ? 0x99aab5 : 0x57f287)
@@ -31,12 +32,12 @@ function buildEmbed(prize, winnerCount, endsAt, ended, winners) {
   if (ended) {
     embed.setDescription(
       winners.length > 0
-        ? `Winner${winners.length > 1 ? 's' : ''}: ${winners.map((w) => `<@${w}>`).join(', ')}`
-        : 'No valid entries — no winner could be picked.'
+        ? t(guildId, 'giveaway.winners', { plural: winners.length > 1 ? 's' : '', list: winners.map((w) => `<@${w}>`).join(', ') })
+        : t(guildId, 'giveaway.noWinners')
     );
   } else {
     embed.setDescription(
-      `React with ${GIVEAWAY_EMOJI} to enter!\nWinners: **${winnerCount}**\nEnds: <t:${Math.floor(endsAt / 1000)}:R>`
+      t(guildId, 'giveaway.active', { count: winnerCount, endsAt: `<t:${Math.floor(endsAt / 1000)}:R>` })
     );
   }
   return embed;
@@ -63,14 +64,15 @@ async function endGiveaway(messageId) {
     giveaway.winners = winners;
     save();
 
-    await message.edit({ embeds: [buildEmbed(giveaway.prize, giveaway.winnerCount, giveaway.endsAt, true, winners)] });
+    const guildId = channel.guild?.id;
+    await message.edit({ embeds: [buildEmbed(guildId, giveaway.prize, giveaway.winnerCount, giveaway.endsAt, true, winners)] });
 
     if (winners.length > 0) {
       await channel.send(
-        `🎉 Congratulations ${winners.map((w) => `<@${w}>`).join(', ')}! You won **${giveaway.prize}**!`
+        t(guildId, 'giveaway.congrats', { list: winners.map((w) => `<@${w}>`).join(', '), prize: giveaway.prize })
       );
     } else {
-      await channel.send(`😔 No one entered the giveaway for **${giveaway.prize}**.`);
+      await channel.send(t(guildId, 'giveaway.noEntries', { prize: giveaway.prize }));
     }
   } catch (err) {
     console.error('Failed to end giveaway:', err.message);
@@ -112,7 +114,7 @@ async function createGiveaway(channelId, prize, durationMinutes, winnerCount) {
 
   const message = await channel.send({
     content: pingRoleId ? `<@&${pingRoleId}>` : undefined,
-    embeds: [buildEmbed(prize, winnerCount, endsAt, false, [])],
+    embeds: [buildEmbed(channel.guild?.id, prize, winnerCount, endsAt, false, [])],
     allowedMentions: pingRoleId ? { roles: [pingRoleId] } : undefined,
   });
   await message.react(GIVEAWAY_EMOJI);

@@ -10,6 +10,7 @@ const {
   ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits,
 } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
+const { t } = require('./i18n');
 
 const configStore = makeGuildStore('ticket-config.json', () => ({
   supportRoleId: null,
@@ -52,31 +53,31 @@ function buildPanelComponents(panel) {
   return [row];
 }
 
-function openControlsRow() {
+function openControlsRow(guildId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket-close').setLabel('Close').setEmoji('🔒').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('ticket-close').setLabel(t(guildId, 'ticket.btnClose')).setEmoji('🔒').setStyle(ButtonStyle.Danger)
   );
 }
 
-function closeConfirmRow() {
+function closeConfirmRow(guildId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket-close-confirm').setLabel('Confirm Close').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('ticket-close-cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('ticket-close-confirm').setLabel(t(guildId, 'ticket.btnConfirmClose')).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('ticket-close-cancel').setLabel(t(guildId, 'ticket.btnCancel')).setStyle(ButtonStyle.Secondary)
   );
 }
 
-function closedControlsRow() {
+function closedControlsRow(guildId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket-reopen').setLabel('Reopen').setEmoji('🔓').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('ticket-transcript').setLabel('Transcript').setEmoji('📄').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('ticket-delete').setLabel('Delete').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('ticket-reopen').setLabel(t(guildId, 'ticket.btnReopen')).setEmoji('🔓').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('ticket-transcript').setLabel(t(guildId, 'ticket.btnTranscript')).setEmoji('📄').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('ticket-delete').setLabel(t(guildId, 'ticket.btnDelete')).setEmoji('🗑️').setStyle(ButtonStyle.Danger)
   );
 }
 
-function deleteConfirmRow() {
+function deleteConfirmRow(guildId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket-delete-confirm').setLabel('Permanently Delete').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('ticket-delete-cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('ticket-delete-confirm').setLabel(t(guildId, 'ticket.btnPermanentlyDelete')).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('ticket-delete-cancel').setLabel(t(guildId, 'ticket.btnCancel')).setStyle(ButtonStyle.Secondary)
   );
 }
 
@@ -113,12 +114,12 @@ async function openTicket(interaction, panelId) {
 
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) {
-    return interaction.reply({ content: '🚫 This ticket panel is no longer configured — ask staff to re-post it.', ephemeral: true });
+    return interaction.reply({ content: t(guild.id, 'ticket.panelGone'), ephemeral: true });
   }
 
-  const openCount = state.tickets.filter((t) => t.userId === member.id && t.status === 'open').length;
+  const openCount = state.tickets.filter((tk) => tk.userId === member.id && tk.status === 'open').length;
   if (openCount >= config.maxOpenPerUser) {
-    return interaction.reply({ content: `🚫 You already have ${openCount} open ticket(s) here (max ${config.maxOpenPerUser}). Close one first.`, ephemeral: true });
+    return interaction.reply({ content: t(guild.id, 'ticket.maxOpen', { count: openCount, max: config.maxOpenPerUser }), ephemeral: true });
   }
 
   const number = state.nextNumber;
@@ -143,7 +144,7 @@ async function openTicket(interaction, panelId) {
       topic: `Ticket for ${member.user.tag} — ${panel.name}`,
     });
   } catch (err) {
-    return interaction.reply({ content: `❌ Could not create ticket channel: ${err.message}`, ephemeral: true });
+    return interaction.reply({ content: t(guild.id, 'ticket.createFailed', { error: err.message }), ephemeral: true });
   }
 
   const ticket = {
@@ -166,19 +167,19 @@ async function openTicket(interaction, panelId) {
   stateStore.save();
 
   const embed = new EmbedBuilder()
-    .setTitle(`🎫 Ticket #${number} — ${panel.name}`)
+    .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: panel.name }))
     .setDescription(config.welcomeMessage.replace('{user}', `${member}`))
     .setColor(colorToInt(panel.panelColor))
-    .setFooter({ text: `Opened by ${member.user.tag}` })
+    .setFooter({ text: t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag }) })
     .setTimestamp();
 
   await channel.send({
     content: config.supportRoleId ? `<@&${config.supportRoleId}> ${member}` : `${member}`,
     embeds: [embed],
-    components: [openControlsRow()],
+    components: [openControlsRow(guild.id)],
   });
 
-  await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
+  await interaction.reply({ content: t(guild.id, 'ticket.created', { channel: channel.toString() }), ephemeral: true });
 }
 
 // Hides the channel from whoever opened it and moves it into the closed-tickets
@@ -204,12 +205,12 @@ async function performClose(guild, ticket, closedByTag) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`🔒 Ticket #${ticket.number} closed`)
-    .setDescription(`Closed by **${closedByTag}**. The original opener (${ticket.userTag}) can no longer see this channel.`)
+    .setTitle(t(guild.id, 'ticket.closedTitle', { number: ticket.number }))
+    .setDescription(t(guild.id, 'ticket.closedDesc', { by: closedByTag, user: ticket.userTag }))
     .setColor(0xff5c4d)
     .setTimestamp();
 
-  await channel.send({ embeds: [embed], components: [closedControlsRow()] }).catch(() => {});
+  await channel.send({ embeds: [embed], components: [closedControlsRow(guild.id)] }).catch(() => {});
 }
 
 async function performReopen(guild, ticket) {
@@ -235,12 +236,12 @@ async function performReopen(guild, ticket) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`🔓 Ticket #${ticket.number} reopened`)
-    .setDescription(`<@${ticket.userId}> can see this ticket again.`)
+    .setTitle(t(guild.id, 'ticket.reopenedTitle', { number: ticket.number }))
+    .setDescription(t(guild.id, 'ticket.reopenedDesc', { userMention: `<@${ticket.userId}>` }))
     .setColor(0x3ddc84)
     .setTimestamp();
 
-  await channel.send({ content: `<@${ticket.userId}>`, embeds: [embed], components: [openControlsRow()] }).catch(() => {});
+  await channel.send({ content: `<@${ticket.userId}>`, embeds: [embed], components: [openControlsRow(guild.id)] }).catch(() => {});
 }
 
 async function addParticipant(guild, channelId, member) {
@@ -303,8 +304,8 @@ function setupTickets(client) {
 
       if (interaction.customId === 'ticket-close') {
         const ticket = findOpenTicket(guild.id, interaction.channelId);
-        if (!ticket) return interaction.reply({ content: 'This is not an open ticket.', ephemeral: true });
-        await interaction.reply({ content: '⚠️ Close this ticket?', components: [closeConfirmRow()] });
+        if (!ticket) return interaction.reply({ content: t(guild.id, 'ticket.notOpen'), ephemeral: true });
+        await interaction.reply({ content: t(guild.id, 'ticket.confirmClose'), components: [closeConfirmRow(guild.id)] });
         return;
       }
 
@@ -315,7 +316,7 @@ function setupTickets(client) {
 
       if (interaction.customId === 'ticket-close-confirm') {
         const ticket = findOpenTicket(guild.id, interaction.channelId);
-        if (!ticket) return interaction.reply({ content: 'This is not an open ticket.', ephemeral: true });
+        if (!ticket) return interaction.reply({ content: t(guild.id, 'ticket.notOpen'), ephemeral: true });
         await interaction.message.delete().catch(() => {});
         await performClose(guild, ticket, interaction.user.tag);
         return;
@@ -323,7 +324,7 @@ function setupTickets(client) {
 
       if (interaction.customId === 'ticket-reopen') {
         const ticket = findClosedTicket(guild.id, interaction.channelId);
-        if (!ticket) return interaction.reply({ content: 'This is not a closed ticket.', ephemeral: true });
+        if (!ticket) return interaction.reply({ content: t(guild.id, 'ticket.notClosed'), ephemeral: true });
         await interaction.deferUpdate();
         await performReopen(guild, ticket);
         return;
@@ -331,18 +332,18 @@ function setupTickets(client) {
 
       if (interaction.customId === 'ticket-transcript') {
         const ticket = findClosedTicket(guild.id, interaction.channelId) || findOpenTicket(guild.id, interaction.channelId);
-        if (!ticket) return interaction.reply({ content: 'No ticket record for this channel.', ephemeral: true });
+        if (!ticket) return interaction.reply({ content: t(guild.id, 'ticket.noRecord'), ephemeral: true });
         await interaction.deferReply();
         const transcript = await generateTranscript(interaction.channel);
         await interaction.editReply({
-          content: `📄 Transcript for ticket **#${ticket.number}**`,
+          content: t(guild.id, 'ticket.transcriptTitle', { number: ticket.number }),
           files: [{ attachment: Buffer.from(transcript, 'utf8'), name: `ticket-${ticket.number}-transcript.txt` }],
         });
         return;
       }
 
       if (interaction.customId === 'ticket-delete') {
-        await interaction.reply({ content: '⚠️ Permanently delete this ticket channel? This cannot be undone.', components: [deleteConfirmRow()] });
+        await interaction.reply({ content: t(guild.id, 'ticket.confirmDelete'), components: [deleteConfirmRow(guild.id)] });
         return;
       }
 
@@ -358,7 +359,7 @@ function setupTickets(client) {
         return;
       }
     } catch (err) {
-      const reply = { content: `❌ ${err.message}`, ephemeral: true };
+      const reply = { content: t(guild.id, 'ticket.error', { message: err.message }), ephemeral: true };
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(reply).catch(() => {});
       } else {

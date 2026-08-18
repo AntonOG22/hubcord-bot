@@ -12,6 +12,7 @@ const store = makeGuildStore('guild-config.json', () => ({
   announcementsChannelId: null,
   giveawayPingRoleId: null,
   announcementPingRoleId: null,
+  language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
 }));
 
 let homeGuildId = null;

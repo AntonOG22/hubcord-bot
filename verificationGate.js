@@ -4,6 +4,7 @@
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const guildConfig = require('./guildConfig');
+const { t } = require('./i18n');
 
 const BUTTON_ID = 'mcsmp-verify-button';
 const store = makeGuildStore('verification-state.json', () => ({ enabled: false }));
@@ -15,16 +16,16 @@ function setupVerificationGate(client) {
     const memberRoleId = guildConfig.getConfig(interaction.guildId).memberRoleId;
     if (!memberRoleId) {
       await interaction
-        .reply({ content: 'Verification is not fully configured on this server yet — ask an admin to set the Member Role in the dashboard.', ephemeral: true })
+        .reply({ content: t(interaction.guildId, 'verify.notConfigured'), ephemeral: true })
         .catch(() => {});
       return;
     }
 
     try {
       await interaction.member.roles.add(memberRoleId);
-      await interaction.reply({ content: '✅ Verified! Welcome.', ephemeral: true });
+      await interaction.reply({ content: t(interaction.guildId, 'verify.success'), ephemeral: true });
     } catch (err) {
-      await interaction.reply({ content: `Could not verify you: ${err.message}`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: t(interaction.guildId, 'verify.failed', { error: err.message }), ephemeral: true }).catch(() => {});
     }
   });
 
@@ -33,11 +34,12 @@ function setupVerificationGate(client) {
 
 async function postVerificationMessage(client, channelId) {
   const channel = await client.channels.fetch(channelId);
+  const guildId = channel.guild.id;
   const embed = new EmbedBuilder()
-    .setTitle('✅ Verify to get access')
-    .setDescription('Click the button below to verify and unlock the rest of the server.')
+    .setTitle(t(guildId, 'verify.embedTitle'))
+    .setDescription(t(guildId, 'verify.embedDesc'))
     .setColor(0x57f287);
-  const button = new ButtonBuilder().setCustomId(BUTTON_ID).setLabel('Verify').setStyle(ButtonStyle.Success);
+  const button = new ButtonBuilder().setCustomId(BUTTON_ID).setLabel(t(guildId, 'verify.button')).setStyle(ButtonStyle.Success);
   const row = new ActionRowBuilder().addComponents(button);
   await channel.send({ embeds: [embed], components: [row] });
 }
