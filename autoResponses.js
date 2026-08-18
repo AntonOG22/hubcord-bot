@@ -1,12 +1,14 @@
 // Per-server keyword auto-replies. Without this, a trigger word set up on one server
 // would fire the bot's reply on every other server it's in too.
 const { makeGuildStore } = require('./guildStore');
+const features = require('./features');
 
 const store = makeGuildStore('autoresponses-state.json', () => []); // guildId -> [{id, trigger, reply}]
 
 function setupAutoResponses(client) {
   client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+    if (!features.isEnabled(message.guild.id, 'autoResponses')) return;
     const content = message.content.toLowerCase();
 
     const responses = store.get(message.guild.id);

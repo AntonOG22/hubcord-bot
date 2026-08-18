@@ -482,6 +482,24 @@ const TOOLS = [
     parameters: { type: 'object', properties: { name: { type: 'string', description: 'Command name' }, disabled: { type: 'boolean' } }, required: ['name', 'disabled'] },
   },
   {
+    name: 'list_features',
+    method: 'GET',
+    path: '/api/features',
+    description: 'List every toggleable feature module (XP, counting, automod, anti-raid, activity tracking, mod-log, sticky messages, auto-responses, reaction roles) and whether it is currently on for this server.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'toggle_feature',
+    method: 'POST',
+    path: '/api/features/:key/toggle',
+    description: 'Turn an entire feature module on or off for this server (a master switch, separate from that feature\'s detailed settings). Valid keys: xp, counting, automod, antiRaid, activityTracking, modLog, stickyMessages, autoResponses, reactionRoles.',
+    parameters: {
+      type: 'object',
+      properties: { key: { type: 'string' }, enabled: { type: 'boolean' } },
+      required: ['key', 'enabled'],
+    },
+  },
+  {
     name: 'reset_counting_game',
     method: 'POST',
     path: '/api/counting/reset',

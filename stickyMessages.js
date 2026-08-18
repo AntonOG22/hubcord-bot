@@ -2,6 +2,7 @@
 // in, the old sticky gets deleted and reposted fresh underneath it.
 const fs = require('fs');
 const path = require('path');
+const features = require('./features');
 
 const STATE_FILE = path.join(__dirname, 'sticky-state.json');
 
@@ -25,6 +26,7 @@ function setupSticky(client) {
   client.on('messageCreate', async (message) => {
     const sticky = stickies[message.channelId];
     if (!sticky) return;
+    if (message.guild && !features.isEnabled(message.guild.id, 'stickyMessages')) return;
     if (message.id === sticky.messageId) return; // don't react to our own repost
 
     try {

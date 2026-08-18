@@ -531,6 +531,7 @@ function refreshEverything() {
   refreshCustomCommands();
   refreshRolePanels();
   refreshGuildSettings();
+  refreshFeatureToggles();
   refreshTicketConfig();
 }
 
@@ -1739,6 +1740,39 @@ async function refreshGuildSettings() {
   document.getElementById('settings-language').value = config.language || 'en';
 }
 
+async function refreshFeatureToggles() {
+  const res = await api('/api/features');
+  if (!res.ok) return;
+  const list = await res.json();
+  const el = document.getElementById('feature-toggles');
+
+  el.innerHTML = list
+    .map(
+      (f) => `
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">${escapeHtml(f.label)}</div>
+          <div class="muted small">${escapeHtml(f.description)}</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" data-feature-key="${f.key}" ${f.enabled ? 'checked' : ''} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`
+    )
+    .join('');
+
+  el.querySelectorAll('[data-feature-key]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const key = input.dataset.featureKey;
+      const enabled = input.checked;
+      const res = await api(`/api/features/${key}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
+      if (!res.ok) input.checked = !enabled; // revert on failure
+      refreshAuditLog();
+    });
+  });
+}
+
 async function saveGuildSettings() {
   const feedback = document.getElementById('settings-feedback');
   const patch = {
@@ -2187,6 +2221,7 @@ const FEATURE_INDEX = [
 
   { label: 'Server Settings', tab: 'server' },
   { label: 'Bot Language', tab: 'server' },
+  { label: 'Feature Toggles (XP, automod, anti-raid, etc.)', tab: 'server' },
   { label: 'Counting Game', tab: 'server' },
   { label: 'Dashboard Audit Log', tab: 'server' },
 

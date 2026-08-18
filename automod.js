@@ -3,6 +3,7 @@
 // gets its own independent on/off switches and its own alerts channel.
 const { makeGuildStore } = require('./guildStore');
 const guildConfig = require('./guildConfig');
+const features = require('./features');
 
 const DEFAULTS = () => ({
   linkFilter: false,
@@ -38,6 +39,7 @@ function setupAutomod(client) {
 
   client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+    if (!features.isEnabled(message.guild.id, 'automod')) return;
     if (!message.member || message.member.permissions.has('ManageMessages')) return; // staff exempt
 
     const config = store.get(message.guild.id);

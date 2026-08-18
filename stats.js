@@ -2,6 +2,7 @@
 // snapshot for a growth chart, and a most-active-chatters leaderboard. Traffic on one
 // server never gets mixed into another server's numbers.
 const { makeGuildStore } = require('./guildStore');
+const features = require('./features');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +27,7 @@ function ensureFreshDay(state) {
 function setupStats(client) {
   client.on('messageCreate', (message) => {
     if (message.author.bot || !message.guild) return;
+    if (!features.isEnabled(message.guild.id, 'activityTracking')) return;
 
     const state = store.get(message.guild.id);
     ensureFreshDay(state);

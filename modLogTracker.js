@@ -4,6 +4,7 @@
 // of the bot's servers it happened on.
 const { AuditLogEvent } = require('discord.js');
 const guildConfig = require('./guildConfig');
+const features = require('./features');
 
 // Finds the most recent matching audit log entry for a target, so we know who did it.
 async function findAuditEntry(guild, type, targetId) {
@@ -21,6 +22,7 @@ async function findAuditEntry(guild, type, targetId) {
 }
 
 async function post(client, guildId, text) {
+  if (!features.isEnabled(guildId, 'modLog')) return;
   const modLogsChannelId = guildConfig.getConfig(guildId).modLogsChannelId;
   if (!modLogsChannelId) return;
   try {

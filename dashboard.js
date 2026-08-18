@@ -37,6 +37,7 @@ const aiAgent = require('./aiAgent');
 const customCommands = require('./customCommands');
 const { brandFooter } = require('./brand');
 const botSettings = require('./botSettings');
+const features = require('./features');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -1048,6 +1049,23 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const config = guildConfig.updateConfig(req.guildId, patch);
     audit(req.guildId, 'Updated server settings', Object.keys(patch).join(', '));
     res.json(config);
+  });
+
+  // ---------- Feature toggles ----------
+  // Master on/off switches for entire modules (XP, automod, anti-raid, etc.)
+  // — separate from each module's own fine-grained settings. See features.js.
+
+  app.get('/api/features', requireGuildAccess, (req, res) => {
+    res.json(features.listWithState(req.guildId));
+  });
+
+  app.post('/api/features/:key/toggle', requireGuildAccess, (req, res) => {
+    const { enabled } = req.body || {};
+    const exists = features.FEATURES.some((f) => f.key === req.params.key);
+    if (!exists) return res.status(404).json({ error: 'Unknown feature' });
+    features.setEnabled(req.guildId, req.params.key, !!enabled);
+    audit(req.guildId, enabled ? 'Enabled feature' : 'Disabled feature', req.params.key);
+    res.json(features.listWithState(req.guildId));
   });
 
   // ---------- Tickets ----------

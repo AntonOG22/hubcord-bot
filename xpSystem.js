@@ -2,6 +2,7 @@
 // the same user — someone active on two servers the bot manages doesn't share a level
 // between them. Cooldown to prevent farming is also tracked per server+user.
 const { makeGuildStore } = require('./guildStore');
+const features = require('./features');
 
 const store = makeGuildStore('xp-state.json', () => ({})); // guildId -> { userId: { xp, level, tag } }
 const COOLDOWN_MS = 60 * 1000;
@@ -17,6 +18,7 @@ function xpForLevel(level) {
 function setupXp(client, { excludedChannelIds = [] } = {}) {
   client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+    if (!features.isEnabled(message.guild.id, 'xp')) return;
     if (excludedChannelIds.includes(message.channelId)) return;
 
     const key = `${message.guild.id}:${message.author.id}`;

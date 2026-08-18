@@ -4,12 +4,14 @@
 const { makeGuildStore } = require('./guildStore');
 const guildConfig = require('./guildConfig');
 const { t } = require('./i18n');
+const features = require('./features');
 
 const store = makeGuildStore('counting-state.json', () => ({ currentCount: 1, lastUserId: null }));
 
 function setupCounting(client) {
   client.on('messageCreate', async (message) => {
     if (!message.guild || message.author.bot) return;
+    if (!features.isEnabled(message.guild.id, 'counting')) return;
 
     const channelId = guildConfig.getConfig(message.guild.id).countingChannelId;
     if (!channelId || message.channelId !== channelId) return;

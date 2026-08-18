@@ -1,6 +1,7 @@
 // Per-server raid detection and lockdown. Join bursts are tracked independently per
 // server, and a lockdown only ever touches the server it was triggered for.
 const guildConfig = require('./guildConfig');
+const features = require('./features');
 
 const JOIN_WINDOW_MS = 10000;
 const JOIN_THRESHOLD = 5;
@@ -24,6 +25,7 @@ function setupAntiRaid(client) {
 
   client.on('guildMemberAdd', (member) => {
     const guildId = member.guild.id;
+    if (!features.isEnabled(guildId, 'antiRaid')) return;
     const now = Date.now();
     const recentJoins = (recentJoinsByGuild.get(guildId) || []).filter((t) => now - t < JOIN_WINDOW_MS);
     recentJoins.push(now);

@@ -2,6 +2,7 @@
 // (or remove) a role.
 const fs = require('fs');
 const path = require('path');
+const features = require('./features');
 
 const STATE_FILE = path.join(__dirname, 'reactionroles-state.json');
 
@@ -40,6 +41,7 @@ function setupReactionRoles(client) {
 
     try {
       const guild = reaction.message.guild;
+      if (guild && !features.isEnabled(guild.id, 'reactionRoles')) return;
       const member = await guild.members.fetch(user.id);
       await member.roles.add(match.roleId);
     } catch (err) {
@@ -58,6 +60,7 @@ function setupReactionRoles(client) {
 
     try {
       const guild = reaction.message.guild;
+      if (guild && !features.isEnabled(guild.id, 'reactionRoles')) return;
       const member = await guild.members.fetch(user.id);
       await member.roles.remove(match.roleId);
     } catch (err) {
