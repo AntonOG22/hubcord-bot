@@ -67,18 +67,6 @@ client.once('ready', async () => {
   verificationGate.setupVerificationGate(client);
 
   setupCommandHandler(client, { client });
-
-  if (process.env.DASHBOARD_SESSION_SECRET) {
-    startDashboard(client, {
-      port: DASHBOARD_PORT,
-      clientId: process.env.DISCORD_CLIENT_ID,
-      clientSecret: process.env.DISCORD_CLIENT_SECRET,
-      sessionSecret: process.env.DASHBOARD_SESSION_SECRET,
-      publicUrl: process.env.PUBLIC_URL,
-    });
-  } else {
-    console.log('DASHBOARD_SESSION_SECRET not set, web dashboard is disabled.');
-  }
 });
 
 client.on('guildMemberAdd', async (member) => {
@@ -97,6 +85,26 @@ client.on('guildMemberAdd', async (member) => {
 // so the very first reads see the real persisted data instead of empty defaults.
 (async () => {
   await preloadAll();
+
+  // The web dashboard starts immediately here, independent of the Discord
+  // gateway login below — it used to wait for the bot's 'ready' event, which
+  // meant a slow or rate-limited Discord login took the *entire website*
+  // down with it (landing page, login, Terms — none of which need the bot to
+  // be connected). Guild-scoped routes already handle an empty/not-yet-ready
+  // client.guilds.cache gracefully (they 403 with "bot not in that server"),
+  // so there's no correctness cost to starting the server first.
+  if (process.env.DASHBOARD_SESSION_SECRET) {
+    startDashboard(client, {
+      port: DASHBOARD_PORT,
+      clientId: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      sessionSecret: process.env.DASHBOARD_SESSION_SECRET,
+      publicUrl: process.env.PUBLIC_URL,
+    });
+  } else {
+    console.log('DASHBOARD_SESSION_SECRET not set, web dashboard is disabled.');
+  }
+
   client.login(TOKEN).catch((err) => {
     console.error('Login failed. Is the token correct?', err);
     process.exit(1);
