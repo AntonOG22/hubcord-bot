@@ -148,6 +148,10 @@ button {
 .login-bg-grid {
   position: absolute;
   inset: 0;
+  /* Purely decorative — must never intercept clicks meant for whatever it's
+     layered behind (this was silently eating every click on the server picker,
+     since .picker-card has no z-index of its own to sit above it). */
+  pointer-events: none;
   background-image:
     radial-gradient(circle at 22% 25%, rgba(63, 232, 214, 0.16), transparent 40%),
     radial-gradient(circle at 78% 75%, rgba(61, 220, 132, 0.10), transparent 40%),
@@ -1403,6 +1407,8 @@ input[type="color"] {
 }
 
 .picker-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 780px;
 }
