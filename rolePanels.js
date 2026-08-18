@@ -5,6 +5,7 @@
 // dashboard's Fun tab — add as many panels as you want, each with its own roles.
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
+const { brandFooter } = require('./brand');
 
 const store = makeGuildStore('role-panels.json', () => ({ panels: [] }));
 
@@ -15,7 +16,7 @@ function colorToInt(hex) {
 }
 
 function buildPanelEmbed(panel) {
-  return new EmbedBuilder().setTitle(panel.title).setDescription(panel.description).setColor(colorToInt(panel.color));
+  return new EmbedBuilder().setTitle(panel.title).setDescription(panel.description).setColor(colorToInt(panel.color)).setFooter(brandFooter(clientRef));
 }
 
 function buildPanelComponents(panel) {

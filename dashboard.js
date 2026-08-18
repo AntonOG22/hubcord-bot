@@ -35,6 +35,7 @@ const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const aiAgent = require('./aiAgent');
 const customCommands = require('./customCommands');
+const { brandFooter } = require('./brand');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -424,6 +425,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
           .setTitle(title)
           .setDescription(message)
           .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x3fe8d6)
+          .setFooter(brandFooter(client))
           .setTimestamp();
         await channel.send({ embeds: [embed] });
       } else {
@@ -446,7 +448,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
     try {
       const channel = await client.channels.fetch(announcementsChannelId);
-      const embed = new EmbedBuilder().setTitle(template.title).setDescription(template.description).setColor(template.color).setTimestamp();
+      const embed = new EmbedBuilder().setTitle(template.title).setDescription(template.description).setColor(template.color).setFooter(brandFooter(client)).setTimestamp();
       await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
       audit(req.guildId, 'Sent announcement template', type);
       res.json({ ok: true });
@@ -466,7 +468,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     try {
       const channel = await client.channels.fetch(channelId);
       const description = options.map((opt, i) => `${NUMBER_EMOJI[i]} ${opt}`).join('\n\n');
-      const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(description).setColor(0x3fe8d6).setTimestamp();
+      const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(description).setColor(0x3fe8d6).setFooter(brandFooter(client)).setTimestamp();
       const msg = await channel.send({ embeds: [embed] });
       for (let i = 0; i < options.length; i++) await msg.react(NUMBER_EMOJI[i]);
       audit(req.guildId, 'Created poll', `"${question}" in #${channel.name}`);

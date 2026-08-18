@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const guildConfig = require('./guildConfig');
 const { t } = require('./i18n');
+const { brandFooter } = require('./brand');
 
 const STATE_FILE = path.join(__dirname, 'giveaways-state.json');
 const GIVEAWAY_EMOJI = '🎉';
@@ -27,6 +28,7 @@ function buildEmbed(guildId, prize, winnerCount, endsAt, ended, winners) {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 Giveaway: ${prize}`)
     .setColor(ended ? 0x99aab5 : 0x57f287)
+    .setFooter(brandFooter(clientRef))
     .setTimestamp();
 
   if (ended) {

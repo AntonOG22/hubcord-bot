@@ -5,6 +5,7 @@ const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('
 const { makeGuildStore } = require('./guildStore');
 const guildConfig = require('./guildConfig');
 const { t } = require('./i18n');
+const { brandFooter } = require('./brand');
 
 const BUTTON_ID = 'mcsmp-verify-button';
 const store = makeGuildStore('verification-state.json', () => ({ enabled: false }));
@@ -38,7 +39,8 @@ async function postVerificationMessage(client, channelId) {
   const embed = new EmbedBuilder()
     .setTitle(t(guildId, 'verify.embedTitle'))
     .setDescription(t(guildId, 'verify.embedDesc'))
-    .setColor(0x57f287);
+    .setColor(0x57f287)
+    .setFooter(brandFooter(client));
   const button = new ButtonBuilder().setCustomId(BUTTON_ID).setLabel(t(guildId, 'verify.button')).setStyle(ButtonStyle.Success);
   const row = new ActionRowBuilder().addComponents(button);
   await channel.send({ embeds: [embed], components: [row] });

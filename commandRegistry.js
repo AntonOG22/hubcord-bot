@@ -6,6 +6,7 @@
 // `run` returns a string to reply with, or throws an Error with a user-facing
 // message on failure — commandHandler.js takes care of sending the reply either way.
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { brandFooter } = require('./brand');
 
 const warnings = require('./warnings');
 const xpSystem = require('./xpSystem');
@@ -570,7 +571,7 @@ cmd({
     const xpList = xpSystem.getLeaderboard(message.guild.id, 5);
     const activeList = stats.getMostActive(message.guild.id, 5);
 
-    const embed = new EmbedBuilder().setTitle('🏆 Leaderboards').setColor(0x3fe8d6);
+    const embed = new EmbedBuilder().setTitle('🏆 Leaderboards').setColor(0x3fe8d6).setFooter(brandFooter(message.client));
 
     embed.addFields({
       name: '⭐ Top XP',
@@ -600,7 +601,8 @@ cmd({
     const embed = new EmbedBuilder()
       .setTitle('📖 Member Commands')
       .setDescription(`Prefix: \`${prefix}\``)
-      .setColor(0x3fe8d6);
+      .setColor(0x3fe8d6)
+      .setFooter(brandFooter(message.client));
 
     for (const [category, cmds] of Object.entries(byCategory)) {
       const value = cmds.map((c) => `\`${prefix}${c.name}\` — ${c.description}`).join('\n').slice(0, 1024);
@@ -717,7 +719,7 @@ cmd({
     if (!config.announcementsChannelId) throw new Error('No announcements channel set for this server (see the dashboard Server tab).');
 
     const channel = await message.client.channels.fetch(config.announcementsChannelId);
-    const embed = new EmbedBuilder().setTitle(title).setDescription(text).setColor(0x3ddc84).setTimestamp();
+    const embed = new EmbedBuilder().setTitle(title).setDescription(text).setColor(0x3ddc84).setFooter(brandFooter(message.client)).setTimestamp();
     const pingContent = config.announcementPingRoleId ? `<@&${config.announcementPingRoleId}>` : '';
 
     await channel.send({
@@ -751,7 +753,7 @@ cmd({
     if (parts.length < 3) throw new Error('Format: question | option1 | option2 | ...');
     const [question, ...options] = parts;
     const numberEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-    const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(options.map((o, i) => `${numberEmoji[i]} ${o}`).join('\n\n')).setColor(0x5865f2);
+    const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(options.map((o, i) => `${numberEmoji[i]} ${o}`).join('\n\n')).setColor(0x5865f2).setFooter(brandFooter(message.client));
     const msg = await message.channel.send({ embeds: [embed] });
     for (let i = 0; i < options.length; i++) await msg.react(numberEmoji[i]);
     return null;
@@ -764,7 +766,7 @@ cmd({
   run: async (message, args) => {
     const [title, description] = args.join(' ').split('|').map((s) => s.trim());
     if (!title || !description) throw new Error('Format: title | description');
-    const embed = new EmbedBuilder().setTitle(title).setDescription(description).setColor(0x5865f2);
+    const embed = new EmbedBuilder().setTitle(title).setDescription(description).setColor(0x5865f2).setFooter(brandFooter(message.client));
     await message.channel.send({ embeds: [embed] });
     return null;
   },
@@ -837,7 +839,7 @@ cmd({
     const announcementsChannelId = guildConfig.getConfig(message.guild.id).announcementsChannelId;
     if (!announcementsChannelId) throw new Error('No announcements channel set for this server (see the dashboard Server tab).');
     const channel = await message.client.channels.fetch(announcementsChannelId);
-    const embed = new EmbedBuilder().setTitle(t.title).setDescription(t.description).setColor(t.color);
+    const embed = new EmbedBuilder().setTitle(t.title).setDescription(t.description).setColor(t.color).setFooter(brandFooter(message.client));
     await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
     return '📢 Template posted';
   },

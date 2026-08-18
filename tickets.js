@@ -11,6 +11,7 @@ const {
 } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { t } = require('./i18n');
+const { brandFooter } = require('./brand');
 
 const configStore = makeGuildStore('ticket-config.json', () => ({
   supportRoleId: null,
@@ -42,8 +43,12 @@ function buildTicketName(config, member, number) {
   );
 }
 
-function buildPanelEmbed(panel) {
-  return new EmbedBuilder().setTitle(panel.panelTitle).setDescription(panel.panelDescription).setColor(colorToInt(panel.panelColor));
+function buildPanelEmbed(panel, client) {
+  return new EmbedBuilder()
+    .setTitle(panel.panelTitle)
+    .setDescription(panel.panelDescription)
+    .setColor(colorToInt(panel.panelColor))
+    .setFooter(brandFooter(client));
 }
 
 function buildPanelComponents(panel) {
@@ -170,7 +175,7 @@ async function openTicket(interaction, panelId) {
     .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: panel.name }))
     .setDescription(config.welcomeMessage.replace('{user}', `${member}`))
     .setColor(colorToInt(panel.panelColor))
-    .setFooter({ text: t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag }) })
+    .setFooter(brandFooter(interaction.client, t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag })))
     .setTimestamp();
 
   await channel.send({
@@ -208,6 +213,7 @@ async function performClose(guild, ticket, closedByTag) {
     .setTitle(t(guild.id, 'ticket.closedTitle', { number: ticket.number }))
     .setDescription(t(guild.id, 'ticket.closedDesc', { by: closedByTag, user: ticket.userTag }))
     .setColor(0xff5c4d)
+    .setFooter(brandFooter(guild.client))
     .setTimestamp();
 
   await channel.send({ embeds: [embed], components: [closedControlsRow(guild.id)] }).catch(() => {});
@@ -239,6 +245,7 @@ async function performReopen(guild, ticket) {
     .setTitle(t(guild.id, 'ticket.reopenedTitle', { number: ticket.number }))
     .setDescription(t(guild.id, 'ticket.reopenedDesc', { userMention: `<@${ticket.userId}>` }))
     .setColor(0x3ddc84)
+    .setFooter(brandFooter(guild.client))
     .setTimestamp();
 
   await channel.send({ content: `<@${ticket.userId}>`, embeds: [embed], components: [openControlsRow(guild.id)] }).catch(() => {});
@@ -450,7 +457,7 @@ async function postPanel(client, guildId, panelId, channelId) {
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) throw new Error('Panel not found.');
   const channel = await client.channels.fetch(channelId);
-  await channel.send({ embeds: [buildPanelEmbed(panel)], components: buildPanelComponents(panel) });
+  await channel.send({ embeds: [buildPanelEmbed(panel, client)], components: buildPanelComponents(panel) });
 }
 
 function listTickets(guildId, status) {

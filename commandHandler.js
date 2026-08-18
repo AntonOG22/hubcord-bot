@@ -8,6 +8,7 @@ const { commands } = require('./commandRegistry');
 const rateCommands = require('./rateCommands');
 const customCommands = require('./customCommands');
 const { EmbedBuilder } = require('discord.js');
+const { brandFooter } = require('./brand');
 
 const commandMap = new Map();
 for (const c of commands) {
@@ -48,7 +49,8 @@ function setupCommandHandler(client, ctx) {
           const embed = new EmbedBuilder()
             .setTitle(custom.embedTitle)
             .setDescription(custom.response)
-            .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e);
+            .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
+            .setFooter(brandFooter(message.client));
           await message.reply({ embeds: [embed] });
         } else {
           await message.reply(custom.response);
