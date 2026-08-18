@@ -51,8 +51,9 @@ function guildCardHtml(g, withBot) {
   const icon = g.icon
     ? `<img src="${g.icon}" alt="" />`
     : `<div class="guild-fallback-icon">${escapeHtml(g.name.slice(0, 1).toUpperCase())}</div>`;
+  const actionAttr = withBot ? `data-guild-select="${g.id}"` : `data-guild-invite="${g.id}"`;
   return `
-    <button class="guild-card" data-guild-select="${g.id}" ${withBot ? '' : 'data-guild-invite="' + g.id + '"'}>
+    <button class="guild-card" ${actionAttr}>
       ${icon}
       <div>
         <div class="guild-card-name">${escapeHtml(g.name)}</div>
