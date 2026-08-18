@@ -56,6 +56,16 @@ const ANNOUNCEMENT_TEMPLATES = {
 
 const NUMBER_EMOJI = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
+// The single Discord user ID allowed into the owner/admin panel. This is a
+// server-side constant, never read from anything the client sends — the
+// browser has no way to influence this value. Access is decided purely by
+// req.session.userId, which itself comes only from a completed Discord OAuth
+// login and lives in a cookie signed with DASHBOARD_SESSION_SECRET. A client
+// cannot forge or edit that cookie without the signing secret, so there is no
+// request the browser can construct that passes this check while lying about
+// who's logged in — this is a real server-side gate, not a UI toggle.
+const OWNER_DISCORD_ID = '1496498092004868279';
+
 // Discord's user-guilds endpoint is rate-limited and doesn't change often — cache
 // each user's guild list for a short window instead of re-fetching on every request.
 const GUILD_CACHE_MS = 30 * 1000;
@@ -104,10 +114,28 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     next();
   }
 
+  // True only for a completed, real Discord login as the one hardcoded owner
+  // ID above. Nothing about this can be influenced by request headers, query
+  // params, or body — it reads exclusively from the signed session cookie.
+  function isOwner(req) {
+    return req.session?.userId === OWNER_DISCORD_ID;
+  }
+
+  // Gate for the owner-only admin panel. Every /api/admin/* route uses this —
+  // anyone else gets a flat 403, logged in or not, no matter what they send.
+  function requireOwner(req, res, next) {
+    if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
+    if (!isOwner(req)) return res.status(403).json({ error: 'Owner access only' });
+    next();
+  }
+
   // Re-verifies, on every single guild-scoped request, that the logged-in user
   // currently has Manage Server on the requested guild AND the bot is present there.
   // This is the entire authorization boundary for the whole dashboard — nothing
   // downstream trusts the client to only ask for guilds it's allowed to touch.
+  // The one exception: the hardcoded owner account, who is allowed onto any
+  // guild the bot is in — still re-verified server-side on every request, the
+  // same way, just against OWNER_DISCORD_ID instead of a Discord permission bit.
   async function requireGuildAccess(req, res, next) {
     if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
 
@@ -116,6 +144,12 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
     const botGuild = client.guilds.cache.get(guildId);
     if (!botGuild) return res.status(403).json({ error: 'The bot is not in that server' });
+
+    if (isOwner(req)) {
+      req.guildId = guildId;
+      req.guild = botGuild;
+      return next();
+    }
 
     try {
       const manageable = await getManageableGuilds(req.session.userId, req.session.accessToken);
@@ -167,16 +201,23 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.get('/api/me', requireAuth, (req, res) => {
-    res.json({ userId: req.session.userId, username: req.session.username, avatar: req.session.avatar });
+    res.json({
+      userId: req.session.userId,
+      username: req.session.username,
+      avatar: req.session.avatar,
+      isOwner: isOwner(req),
+    });
   });
 
   // Every server the logged-in user manages, split by whether the bot is already
   // there — the "not yet" list powers the one-click "Add to this server" flow.
+  // The owner additionally sees every server the bot is in at all, managed or not.
   app.get('/api/guilds', requireAuth, async (req, res) => {
     try {
       const manageable = await getManageableGuilds(req.session.userId, req.session.accessToken);
       const withBot = [];
       const withoutBot = [];
+      const seen = new Set();
       for (const g of manageable) {
         const botGuild = client.guilds.cache.get(g.id);
         const entry = {
@@ -185,7 +226,19 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
           icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
           memberCount: botGuild?.memberCount ?? null,
         };
+        seen.add(g.id);
         (botGuild ? withBot : withoutBot).push(entry);
+      }
+      if (isOwner(req)) {
+        for (const botGuild of client.guilds.cache.values()) {
+          if (seen.has(botGuild.id)) continue;
+          withBot.push({
+            id: botGuild.id,
+            name: botGuild.name,
+            icon: botGuild.iconURL({ size: 64 }),
+            memberCount: botGuild.memberCount,
+          });
+        }
       }
       withBot.sort((a, b) => a.name.localeCompare(b.name));
       withoutBot.sort((a, b) => a.name.localeCompare(b.name));
@@ -193,6 +246,32 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     } catch (err) {
       res.status(401).json({ error: 'Discord session expired, please log in again' });
     }
+  });
+
+  // ---------- Owner-only admin panel ----------
+  // Everything under here is gated by requireOwner: a flat 403 for anyone whose
+  // session isn't OWNER_DISCORD_ID, checked fresh on every single request.
+
+  app.get('/api/admin/overview', requireOwner, (req, res) => {
+    const guilds = [...client.guilds.cache.values()]
+      .map((g) => ({
+        id: g.id,
+        name: g.name,
+        icon: g.iconURL({ size: 64 }),
+        memberCount: g.memberCount,
+        boostTier: g.premiumTier,
+      }))
+      .sort((a, b) => b.memberCount - a.memberCount);
+
+    res.json({
+      botTag: client.user?.tag || null,
+      botAvatar: client.user?.displayAvatarURL({ size: 128 }) || null,
+      botPing: Math.round(client.ws.ping),
+      botUptimeMs: Date.now() - startedAt,
+      totalGuilds: guilds.length,
+      totalMembers: guilds.reduce((sum, g) => sum + (g.memberCount || 0), 0),
+      guilds,
+    });
   });
 
   app.get('/api/invite-url', requireAuth, (req, res) => {

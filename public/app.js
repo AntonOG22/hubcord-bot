@@ -239,6 +239,94 @@ function setupTabs() {
 
       document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
       document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+
+      if (btn.dataset.tab === 'admin') {
+        enterAdminTab();
+      } else {
+        leaveAdminTab();
+      }
+    });
+  });
+}
+
+// ---------- Owner-only admin tab ----------
+//
+// The nav button and this tab are only ever shown client-side when the
+// server already told us (via /api/me) that this session belongs to the
+// owner account — that's pure UI convenience, not the security boundary.
+// The real boundary is server-side: every /api/admin/* call is re-checked
+// against the signed session cookie on every single request, regardless of
+// what this tab does or doesn't show. The 5-second poll below exists so a
+// revoked/expired session gets kicked out of this specific view quickly
+// even if nothing else on the page happens to trigger a request meanwhile —
+// it is a UX nicety layered on top of the real, always-on server check, not
+// a replacement for it.
+let adminPollTimer = null;
+
+function enterAdminTab() {
+  loadAdminOverview();
+  if (adminPollTimer) return;
+  adminPollTimer = setInterval(async () => {
+    try {
+      const res = await api('/api/me');
+      if (!res.ok) throw new Error('unauthorized');
+      const fresh = await res.json();
+      if (!fresh.isOwner) throw new Error('no longer owner');
+    } catch {
+      window.location.href = '/auth/logout';
+    }
+  }, 5000);
+}
+
+function leaveAdminTab() {
+  if (adminPollTimer) {
+    clearInterval(adminPollTimer);
+    adminPollTimer = null;
+  }
+}
+
+async function loadAdminOverview() {
+  const res = await api('/api/admin/overview');
+  if (!res.ok) {
+    // Server-side gate said no — bounce out immediately, this session isn't
+    // (or is no longer) the owner, no matter what the client-side UI showed.
+    window.location.href = '/auth/logout';
+    return;
+  }
+  const data = await res.json();
+
+  document.getElementById('admin-total-guilds').textContent = data.totalGuilds;
+  document.getElementById('admin-total-members').textContent = data.totalMembers.toLocaleString();
+  document.getElementById('admin-bot-ping').textContent = data.botPing;
+  document.getElementById('admin-bot-uptime').textContent = formatUptime(data.botUptimeMs);
+
+  const list = document.getElementById('admin-guild-list');
+  list.innerHTML = data.guilds
+    .map((g) => {
+      const icon = g.icon
+        ? `<img src="${g.icon}" class="list-avatar" alt="" />`
+        : `<div class="list-avatar guild-fallback-icon" style="display:flex;align-items:center;justify-content:center;">${escapeHtml(g.name.slice(0, 1).toUpperCase())}</div>`;
+      return `
+        <div class="list-row">
+          ${icon}
+          <div class="list-main">
+            <div class="list-title">${escapeHtml(g.name)}</div>
+            <div class="list-sub"><span>${g.memberCount.toLocaleString()} members</span><span>Boost tier ${g.boostTier}</span></div>
+          </div>
+          <div class="list-actions">
+            <button class="secondary-button" data-admin-manage="${g.id}">Manage</button>
+          </div>
+        </div>`;
+    })
+    .join('');
+
+  list.querySelectorAll('[data-admin-manage]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      leaveAdminTab();
+      selectedGuildId = btn.dataset.adminManage;
+      initialized = false;
+      init();
+      document.querySelector('.nav-button[data-tab="overview"]').click();
     });
   });
 }
@@ -250,6 +338,7 @@ let initialized = false;
 function init() {
   document.getElementById('topbar-avatar').src = me.avatar;
   document.getElementById('topbar-username').textContent = me.username;
+  document.getElementById('admin-nav-button').classList.toggle('hidden', !me.isOwner);
   refreshGuildSelect();
 
   if (initialized) {
