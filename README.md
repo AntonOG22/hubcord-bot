@@ -1,4 +1,4 @@
-# Hubcord
+# Emarald
 
 A public, multi-tenant Discord bot dashboard. Anyone can log in with their own
 Discord account and manage only the servers where Discord confirms they have

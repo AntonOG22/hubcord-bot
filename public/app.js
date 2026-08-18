@@ -57,7 +57,7 @@ function guildCardHtml(g, withBot) {
       ${icon}
       <div>
         <div class="guild-card-name">${escapeHtml(g.name)}</div>
-        <div class="guild-card-sub">${withBot ? `${g.memberCount ?? '—'} members` : 'Add Hubcord →'}</div>
+        <div class="guild-card-sub">${withBot ? `${g.memberCount ?? '—'} members` : 'Add Emarald →'}</div>
       </div>
     </button>`;
 }
@@ -72,7 +72,7 @@ function renderPicker() {
 
   withoutBotEl.innerHTML = guildsCache.withoutBot.length
     ? guildsCache.withoutBot.map((g) => guildCardHtml(g, false)).join('')
-    : '<span class="picker-empty">Hubcord is already in every server you manage. 🎉</span>';
+    : '<span class="picker-empty">Emarald is already in every server you manage. 🎉</span>';
 
   document.querySelectorAll('[data-guild-select]').forEach((btn) => {
     btn.addEventListener('click', () => enterDashboard(btn.dataset.guildSelect));

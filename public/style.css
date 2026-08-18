@@ -1,32 +1,33 @@
 /* ==========================================================================
-   MCSMP Control Panel — design tokens
-   Palette is drawn straight from the server's own material vocabulary:
-   diamond (primary accent), emerald (online/success), redstone (offline/
-   danger), gold (warning). Deepslate/stone/cobblestone/andesite name the
-   dark neutral scale. Chakra Petch gives headings a technical, console feel
-   without tipping into a literal pixel-font Minecraft pastiche.
+   Emarald Control Panel — design tokens
+   A faceted-gemstone palette: a punchy jewel-cut emerald carries every
+   primary action and glow, a second, calmer moss-green marks live/online
+   state so the two never get confused. Warm near-black surfaces (a hint of
+   green in the shadows, not blue) replace the old cyan "console" mood.
+   Chakra Petch keeps headings technical without tipping into pixel-font
+   pastiche.
    ========================================================================== */
 
 :root {
-  --bg: #0a0d10;            /* deepslate */
-  --surface: #13181b;       /* stone */
-  --surface-2: #1a2024;     /* cobblestone */
-  --surface-3: #212a2e;     /* andesite */
-  --border: #29343a;
-  --border-soft: #1c2529;
-  --text: #eaf1ee;
-  --text-muted: #8ea0a0;
-  --text-faint: #52646a;
+  --bg: #070c09;             /* near-black, faint green cast */
+  --surface: #101915;        /* raised panel */
+  --surface-2: #16211b;      /* input / hover fill */
+  --surface-3: #1d2b23;      /* highest raised */
+  --border: #24382c;
+  --border-soft: #182420;
+  --text: #eaf3ec;
+  --text-muted: #93a89c;
+  --text-faint: #55695e;
 
-  --diamond: #3fe8d6;
-  --diamond-bright: #7ff5e8;
-  --diamond-soft: rgba(63, 232, 214, 0.14);
-  --emerald: #3ddc84;
-  --emerald-soft: rgba(61, 220, 132, 0.14);
+  --diamond: #17e88f;        /* brand emerald (kept var name for compat) */
+  --diamond-bright: #7dffce;
+  --diamond-soft: rgba(23, 232, 143, 0.14);
+  --emerald: #6fdc4d;        /* moss green — reserved for live/online state */
+  --emerald-soft: rgba(111, 220, 77, 0.14);
   --redstone: #ff5c4d;
   --redstone-soft: rgba(255, 92, 77, 0.14);
-  --gold: #ffc94d;
-  --gold-soft: rgba(255, 201, 77, 0.14);
+  --gold: #e8c357;
+  --gold-soft: rgba(232, 195, 87, 0.14);
   --discord: #5865f2;
 
   --accent: var(--diamond);
@@ -36,8 +37,8 @@
   --red: var(--redstone);
   --yellow: var(--gold);
 
-  --radius: 14px;
-  --radius-sm: 9px;
+  --radius: 18px;
+  --radius-sm: 11px;
 
   --font-display: "Chakra Petch", "Space Grotesk", -apple-system, sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -66,8 +67,8 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(63, 232, 214, 0.09), transparent 38%),
-    radial-gradient(circle at 92% 85%, rgba(61, 220, 132, 0.07), transparent 42%),
+    radial-gradient(circle at 12% 8%, rgba(23, 232, 143, 0.09), transparent 38%),
+    radial-gradient(circle at 92% 85%, rgba(111, 220, 77, 0.07), transparent 42%),
     linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: auto, auto, 46px 46px, 46px 46px;
@@ -153,8 +154,8 @@ button {
      since .picker-card has no z-index of its own to sit above it). */
   pointer-events: none;
   background-image:
-    radial-gradient(circle at 22% 25%, rgba(63, 232, 214, 0.16), transparent 40%),
-    radial-gradient(circle at 78% 75%, rgba(61, 220, 132, 0.10), transparent 40%),
+    radial-gradient(circle at 22% 25%, rgba(23, 232, 143, 0.16), transparent 40%),
+    radial-gradient(circle at 78% 75%, rgba(111, 220, 77, 0.10), transparent 40%),
     linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: auto, auto, 42px 42px, 42px 42px;
@@ -168,19 +169,19 @@ button {
   padding: 44px 38px;
   width: 340px;
   text-align: center;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(63, 232, 214, 0.08),
-    0 0 60px rgba(63, 232, 214, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(23, 232, 143, 0.08),
+    0 0 60px rgba(23, 232, 143, 0.08);
   animation: login-glow 4s ease-in-out infinite;
 }
 
 @keyframes login-glow {
   0%, 100% {
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(63, 232, 214, 0.08),
-      0 0 60px rgba(63, 232, 214, 0.08);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(23, 232, 143, 0.08),
+      0 0 60px rgba(23, 232, 143, 0.08);
   }
   50% {
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(63, 232, 214, 0.22),
-      0 0 90px rgba(63, 232, 214, 0.18);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(23, 232, 143, 0.22),
+      0 0 90px rgba(23, 232, 143, 0.18);
   }
 }
 
@@ -193,7 +194,7 @@ button {
 .login-logo {
   font-size: 2.6rem;
   margin-bottom: 10px;
-  filter: drop-shadow(0 0 22px rgba(63, 232, 214, 0.5));
+  filter: drop-shadow(0 0 22px rgba(23, 232, 143, 0.5));
 }
 
 .login-card h1 {
@@ -235,13 +236,13 @@ button {
   font-weight: 700;
   font-size: 0.92rem;
   cursor: pointer;
-  box-shadow: 0 0 24px rgba(63, 232, 214, 0.35);
+  box-shadow: 0 0 24px rgba(23, 232, 143, 0.35);
   transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .login-card button:hover {
   filter: brightness(1.1);
-  box-shadow: 0 0 34px rgba(63, 232, 214, 0.55);
+  box-shadow: 0 0 34px rgba(23, 232, 143, 0.55);
 }
 
 .login-card button:active {
@@ -262,24 +263,34 @@ button {
   min-height: 100vh;
 }
 
+#app-screen {
+  gap: 14px;
+  padding: 14px 14px 14px 0;
+}
+
 .sidebar {
-  width: 232px;
+  width: 240px;
   flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 14px;
+  height: calc(100vh - 28px);
+  margin: 14px 0 14px 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.7);
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 22px 22px;
+  padding: 20px 20px;
   border-bottom: 1px solid var(--border-soft);
+  background: linear-gradient(135deg, var(--diamond-soft), transparent 70%);
 }
 
 .brand-mark {
@@ -289,8 +300,8 @@ button {
 }
 
 @keyframes brand-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(63, 232, 214, 0.25)); }
-  50% { filter: drop-shadow(0 0 12px rgba(63, 232, 214, 0.6)); }
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(23, 232, 143, 0.25)); }
+  50% { filter: drop-shadow(0 0 12px rgba(23, 232, 143, 0.6)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -353,17 +364,16 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  border-radius: 999px;
   border: none;
-  border-left: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
   font-size: 0.86rem;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
 
 .nav-icon {
@@ -397,10 +407,10 @@ button {
 }
 
 .nav-button.active {
-  background: var(--diamond-soft);
+  background: linear-gradient(90deg, var(--diamond-soft), transparent);
   color: var(--diamond-bright);
-  border-left-color: var(--diamond);
-  box-shadow: inset 0 0 20px rgba(63, 232, 214, 0.08);
+  box-shadow: inset 2px 0 0 var(--diamond);
+  transform: translateX(2px);
 }
 
 .nav-button.active .nav-icon {
@@ -453,7 +463,7 @@ button {
 
 .sidebar-footer:has(.dot.connected) .avatar {
   border-color: var(--emerald);
-  box-shadow: 0 0 12px -2px rgba(61, 220, 132, 0.7);
+  box-shadow: 0 0 12px -2px rgba(111, 220, 77, 0.7);
 }
 
 .dot {
@@ -500,14 +510,16 @@ button {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0 40px;
-  height: 46px;
+  padding: 0 28px;
+  height: 44px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border-soft);
-  box-shadow: 0 1px 0 rgba(63, 232, 214, 0.18), 0 8px 24px -12px rgba(63, 232, 214, 0.25);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px -12px rgba(23, 232, 143, 0.25);
   position: sticky;
-  top: 0;
+  top: 14px;
   z-index: 5;
+  margin: 14px 14px 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
 }
@@ -603,9 +615,9 @@ button {
 }
 
 .card:hover {
-  border-color: rgba(63, 232, 214, 0.35);
+  border-color: rgba(23, 232, 143, 0.35);
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.6), 0 0 30px -14px rgba(63, 232, 214, 0.35);
+  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.6), 0 0 30px -14px rgba(23, 232, 143, 0.35);
 }
 
 .card.wide {
@@ -628,13 +640,13 @@ button {
   right: 0;
   height: 2px;
   background: linear-gradient(90deg, var(--diamond), transparent);
-  box-shadow: 0 0 12px 1px rgba(63, 232, 214, 0.6);
+  box-shadow: 0 0 12px 1px rgba(23, 232, 143, 0.6);
   opacity: 0.85;
 }
 
 .stat-card.accent-mc::before {
   background: linear-gradient(90deg, var(--emerald), transparent);
-  box-shadow: 0 0 12px 1px rgba(61, 220, 132, 0.6);
+  box-shadow: 0 0 12px 1px rgba(111, 220, 77, 0.6);
 }
 
 .stat-label {
@@ -654,11 +666,11 @@ button {
   align-items: center;
   gap: 10px;
   letter-spacing: 0;
-  text-shadow: 0 0 22px rgba(63, 232, 214, 0.35);
+  text-shadow: 0 0 22px rgba(23, 232, 143, 0.35);
 }
 
 .stat-card.accent-mc .stat-value {
-  text-shadow: 0 0 22px rgba(61, 220, 132, 0.4);
+  text-shadow: 0 0 22px rgba(111, 220, 77, 0.4);
 }
 
 .stat-value.small-value {
@@ -753,7 +765,7 @@ input[type="color"] {
 .primary-button {
   background: var(--diamond);
   color: #04201c;
-  box-shadow: 0 0 18px -4px rgba(63, 232, 214, 0.55);
+  box-shadow: 0 0 18px -4px rgba(23, 232, 143, 0.55);
 }
 
 .secondary-button {
@@ -768,7 +780,7 @@ input[type="color"] {
   border: 1px solid rgba(255, 92, 77, 0.3);
 }
 
-.primary-button:hover { filter: brightness(1.1); box-shadow: 0 0 28px -4px rgba(63, 232, 214, 0.8); }
+.primary-button:hover { filter: brightness(1.1); box-shadow: 0 0 28px -4px rgba(23, 232, 143, 0.8); }
 .secondary-button:hover { background: var(--border); }
 .danger-button:hover { background: rgba(255, 92, 77, 0.22); box-shadow: 0 0 18px -4px rgba(255, 92, 77, 0.5); }
 
@@ -1183,7 +1195,7 @@ input[type="color"] {
 .toggle-switch input:checked + .toggle-slider {
   background: var(--diamond-soft);
   border-color: var(--diamond);
-  box-shadow: 0 0 14px -2px rgba(63, 232, 214, 0.7);
+  box-shadow: 0 0 14px -2px rgba(23, 232, 143, 0.7);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -1205,35 +1217,58 @@ input[type="color"] {
 @media (max-width: 720px) {
   #app-screen {
     flex-direction: column;
+    gap: 10px;
+    padding: 10px;
   }
   .sidebar {
     width: 100%;
     height: auto;
     position: relative;
+    top: 0;
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
+    margin: 0;
+  }
+  .sidebar-brand {
+    padding: 14px 16px;
+  }
+  .server-switcher {
+    flex: 1;
+    min-width: 160px;
+    padding: 10px 14px;
+    border-bottom: none;
   }
   .side-nav {
     flex-direction: row;
     flex-wrap: wrap;
     padding: 10px 12px;
+    width: 100%;
+    max-height: 160px;
+    overflow-y: auto;
   }
   .nav-group-label {
     display: none;
   }
   .sidebar-footer {
-    margin-left: auto;
+    width: 100%;
   }
   .vitals-strip {
-    padding: 0 18px;
+    padding: 0 16px;
+    margin: 0;
     overflow-x: auto;
+    top: 0;
+    border-radius: var(--radius-sm);
   }
   .content {
-    padding: 22px 18px 40px;
+    padding: 18px 14px 40px;
   }
   .grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card {
+    padding: 18px 18px;
   }
   .card.wide {
     grid-column: span 1;
@@ -1248,6 +1283,29 @@ input[type="color"] {
   .guild-info-stats {
     grid-template-columns: repeat(2, 1fr);
   }
+  .row {
+    flex-direction: column;
+  }
+  .row > input,
+  .row > select {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .page-head h1 {
+    font-size: 1.35rem;
+  }
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  .landing-hero h1 {
+    font-size: 1.6rem;
+  }
+  .discord-login-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* ==========================================================================
@@ -1259,6 +1317,55 @@ input[type="color"] {
   position: relative;
   overflow: hidden;
   background: var(--bg);
+}
+
+/* Faceted-gem accent shapes: the brand's signature visual — two low-opacity
+   hexagonal "cut emerald" blooms, slowly rotating, sitting behind the hero
+   copy. This is the single biggest departure from the old flat HUD-grid
+   look. */
+.gem-facet {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: blur(2px);
+  opacity: 0.5;
+  animation: gem-rotate 40s linear infinite;
+}
+
+.gem-facet-1 {
+  top: -120px;
+  right: -140px;
+  width: 480px;
+  height: 480px;
+  background: conic-gradient(from 90deg, var(--diamond-soft), transparent 30%, var(--emerald-soft), transparent 70%, var(--diamond-soft));
+}
+
+.gem-facet-2 {
+  bottom: -180px;
+  left: -160px;
+  width: 380px;
+  height: 380px;
+  background: conic-gradient(from 200deg, var(--emerald-soft), transparent 35%, var(--diamond-soft), transparent 75%);
+  animation-duration: 55s;
+  animation-direction: reverse;
+}
+
+@keyframes gem-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gem-facet {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .gem-facet {
+    opacity: 0.3;
+  }
 }
 
 .landing-nav {
@@ -1299,7 +1406,7 @@ input[type="color"] {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--diamond);
-  border: 1px solid rgba(63, 232, 214, 0.35);
+  border: 1px solid rgba(23, 232, 143, 0.35);
   background: var(--diamond-soft);
   border-radius: 999px;
   padding: 6px 16px;
@@ -1338,13 +1445,13 @@ input[type="color"] {
   font-size: 0.98rem;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 0 24px -4px rgba(63, 232, 214, 0.55);
+  box-shadow: 0 0 24px -4px rgba(23, 232, 143, 0.55);
   transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
 .discord-login-btn:hover {
   filter: brightness(1.1);
-  box-shadow: 0 0 34px -4px rgba(63, 232, 214, 0.8);
+  box-shadow: 0 0 34px -4px rgba(23, 232, 143, 0.8);
 }
 
 .discord-login-btn:active {
@@ -1462,7 +1569,7 @@ input[type="color"] {
 }
 
 .guild-card:hover {
-  border-color: rgba(63, 232, 214, 0.4);
+  border-color: rgba(23, 232, 143, 0.4);
   transform: translateY(-2px);
   box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.6);
 }
@@ -1523,13 +1630,15 @@ input[type="color"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
-  height: 46px;
+  padding: 0 24px;
+  height: 44px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
   position: sticky;
-  top: 0;
+  top: 14px;
   z-index: 6;
+  margin: 14px 14px 0;
 }
 
 .topbar-guild {
