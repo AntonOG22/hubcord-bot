@@ -376,6 +376,48 @@ button {
   color: var(--text-faint);
 }
 
+.mention-dropdown {
+  position: fixed;
+  z-index: 40;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.6);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.mention-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.mention-result:last-child {
+  border-bottom: none;
+}
+
+.mention-result:hover {
+  background: var(--surface-3);
+}
+
+.mention-result img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mention-empty {
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: var(--text-faint);
+}
+
 @media (max-width: 900px) {
   .appbar-search {
     display: none;
@@ -666,6 +708,50 @@ button {
   margin-bottom: 14px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+/* ---------- Guide reference cards ---------- */
+
+.guide-var-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.guide-var-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 14px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.guide-var-row code {
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.guide-var-row span {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.guide-tip {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 640px) {
+  .guide-var-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 /* ---------- Forms ---------- */

@@ -185,6 +185,7 @@
       <button class="nav-button" data-tab="leveling"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z"/></svg></span>Leveling</button>
       <button class="nav-button" data-tab="insights"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg></span>Insights</button>
       <button class="nav-button" data-tab="server"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="7.5" cy="7" r="0.6" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></span>Server</button>
+      <button class="nav-button" data-tab="guides"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5"/><circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none"/></svg></span>Guides</button>
       <button class="nav-button nav-button-admin hidden" data-tab="admin" id="admin-nav-button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5.5-3.8 8.5-8 10-4.2-1.5-8-4.5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></span>Admin</button>
     </nav>
 
@@ -903,6 +904,72 @@
             <h2>Dashboard Audit Log</h2>
             <p class="muted small">Every moderation/messaging action taken from this panel, for this server only</p>
             <div id="audit-log" class="scroll-list tall"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== GUIDES ===================== -->
+      <section id="tab-guides" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Reference</span>
+          <h1>Guides</h1>
+          <p class="muted">Every placeholder variable the dashboard understands, and what it fills in with — grouped by where you'd use it.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Tickets</h2>
+            <p class="muted small">Set on the Tickets tab, under Global Settings and each individual panel.</p>
+            <div class="guide-var-list">
+              <div class="guide-var-row">
+                <code>{username}</code>
+                <span>The Discord username of whoever opened the ticket. Used in <strong>Channel name format</strong> — e.g. <code>ticket-{username}</code> becomes <code>ticket-anton</code>.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{count}</code>
+                <span>A running ticket number for this server, starting at 1 and increasing forever — this is what makes each ticket channel/number unique, e.g. <code>ticket-{count}</code> becomes <code>ticket-42</code>. Every panel on a server shares the same counter, so numbers never repeat even across different panels.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{user}</code>
+                <span>A mention of the member who opened the ticket (<code>@username</code>). Used in <strong>Welcome message inside new tickets</strong> — e.g. "Thanks for reaching out, {user}!".</span>
+              </div>
+            </div>
+            <p class="muted small guide-tip">Tip: combine both in the channel name format, e.g. <code>{count}-{username}</code> → <code>42-anton</code>, so channels sort by ticket number but still show who opened them.</p>
+          </section>
+
+          <section class="card wide">
+            <h2>Join &amp; Leave Messages</h2>
+            <p class="muted small">Set on the Automation tab, in the Join &amp; Leave Messages card — usable in both the Title and Description fields.</p>
+            <div class="guide-var-list">
+              <div class="guide-var-row">
+                <code>{user}</code>
+                <span>A mention of the member who joined or left (<code>@username</code>).</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{username}</code>
+                <span>Their plain Discord tag as text, without a clickable mention — useful for leave messages, since a mention of someone who already left won't render for anyone.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{server}</code>
+                <span>This server's name.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{membercount}</code>
+                <span>The server's current total member count, updated live at the moment the message sends.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="card wide">
+            <h2>Images on messages</h2>
+            <p class="muted small">Anywhere you see an "Image" field (Join/Leave Messages, Send a Message, Custom Commands), you can either paste a direct image URL or click <strong>Upload</strong> to pick a file from your device — PNG, JPEG, GIF, or WEBP, up to 8&nbsp;MB. Uploaded images are hosted permanently, so they won't break later like some pasted links can.</p>
+          </section>
+
+          <section class="card wide">
+            <h2>Picking a member: type @</h2>
+            <p class="muted small">Any field that asks for a User ID (Warnings, Direct Message, Fun → Compliment target) supports typing <code>@</code> followed by part of a username to search your server's members live and click to fill in their ID — the same way Discord's own message box works. You can still paste a raw User ID directly if you already have it.</p>
           </section>
 
         </div>

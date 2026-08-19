@@ -131,6 +131,90 @@ wireImageUpload('customcmd-image-file', 'customcmd-image', 'customcmd-image-feed
 wireImageUpload('joinmsg-image-file', 'joinmsg-image', 'joinmsg-image-feedback');
 wireImageUpload('leavemsg-image-file', 'leavemsg-image', 'leavemsg-image-feedback');
 
+// ---------- @mention member autocomplete ----------
+//
+// Any "User ID" field can be filled by typing @ followed by part of a
+// username instead of pasting a raw ID — mirrors Discord's own message box.
+// Selecting a result replaces the whole field with that member's ID, since
+// these fields only ever hold a single ID, never mixed free text.
+
+function wireMentionAutocomplete(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  let dropdown = null;
+  let debounceTimer = null;
+
+  function closeDropdown() {
+    if (dropdown) {
+      dropdown.remove();
+      dropdown = null;
+    }
+  }
+
+  function positionDropdown() {
+    if (!dropdown) return;
+    const rect = input.getBoundingClientRect();
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.width = `${Math.max(rect.width, 220)}px`;
+  }
+
+  function renderResults(members) {
+    closeDropdown();
+    dropdown = document.createElement('div');
+    dropdown.className = 'mention-dropdown';
+    dropdown.innerHTML = members.length
+      ? members
+          .slice(0, 8)
+          .map(
+            (m) => `
+        <div class="mention-result" data-id="${m.id}">
+          <img src="${m.avatar}" alt="" />
+          <span>${escapeHtml(m.tag)}</span>
+        </div>`
+          )
+          .join('')
+      : '<div class="mention-empty">No matching members</div>';
+
+    document.body.appendChild(dropdown);
+    positionDropdown();
+
+    dropdown.querySelectorAll('[data-id]').forEach((row) => {
+      // mousedown (not click) fires before the input's blur, so the
+      // dropdown is still there to read from when the user clicks it.
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = row.dataset.id;
+        closeDropdown();
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    const value = input.value;
+    const atIndex = value.lastIndexOf('@');
+    if (atIndex === -1) {
+      closeDropdown();
+      return;
+    }
+    const query = value.slice(atIndex + 1);
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      const res = await api(`/api/members?search=${encodeURIComponent(query)}`);
+      if (!res.ok) return;
+      renderResults(await res.json());
+    }, 200);
+  });
+
+  input.addEventListener('blur', () => setTimeout(closeDropdown, 150));
+  window.addEventListener('scroll', () => dropdown && positionDropdown(), true);
+}
+
+wireMentionAutocomplete('warn-user-id');
+wireMentionAutocomplete('dm-user-id');
+wireMentionAutocomplete('fun-target');
+
 async function boot() {
   try {
     const res = await api('/api/me');
@@ -2341,6 +2425,9 @@ const FEATURE_INDEX = [
   { label: 'Counting Game', tab: 'server' },
   { label: 'Dashboard Audit Log', tab: 'server' },
 
+  { label: 'Guides / Variables Reference', tab: 'guides' },
+  { label: 'Ticket variables ({count}, {username}, {user})', tab: 'guides' },
+  { label: 'Join/Leave variables', tab: 'guides' },
   { label: 'Every Server (owner)', tab: 'admin' },
   { label: 'Branding / Watermark toggle (owner)', tab: 'admin' },
 ];
