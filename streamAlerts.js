@@ -20,6 +20,8 @@ const features = require('./features');
 const POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes — light on both APIs, fast enough to feel live
 const TWITCH_COLOR = 0x9146ff;
 const YOUTUBE_COLOR = 0xff0000;
+const MAX_TRACKED_PER_GUILD = 15; // enforced in dashboard.js's POST /api/stream-alerts
+const TWITCH_LOGINS_PER_REQUEST = 100; // Helix's own hard cap on user_login params in one call
 
 const store = makeGuildStore('stream-alerts.json', () => ({ tracked: [] }));
 
@@ -56,14 +58,21 @@ async function fetchLiveTwitchStreams(logins) {
   const token = await getTwitchToken();
   if (!token) return new Map();
 
-  const params = logins.map((l) => `user_login=${encodeURIComponent(l)}`).join('&');
-  const res = await fetch(`https://api.twitch.tv/helix/streams?${params}`, {
-    headers: { 'Client-Id': process.env.TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Twitch streams request failed: ${res.status}`);
-  const data = await res.json();
+  // Helix rejects a single request over 100 user_login params outright, and
+  // this list is the union of every server's tracked Twitch channels sharing
+  // this one process — chunking keeps a large combined list from breaking
+  // the check for everyone instead of just the servers past the 100th login.
   const map = new Map();
-  for (const stream of data.data || []) map.set(stream.user_login.toLowerCase(), stream);
+  for (let i = 0; i < logins.length; i += TWITCH_LOGINS_PER_REQUEST) {
+    const chunk = logins.slice(i, i + TWITCH_LOGINS_PER_REQUEST);
+    const params = chunk.map((l) => `user_login=${encodeURIComponent(l)}`).join('&');
+    const res = await fetch(`https://api.twitch.tv/helix/streams?${params}`, {
+      headers: { 'Client-Id': process.env.TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`Twitch streams request failed: ${res.status}`);
+    const data = await res.json();
+    for (const stream of data.data || []) map.set(stream.user_login.toLowerCase(), stream);
+  }
   return map;
 }
 
@@ -274,4 +283,4 @@ function removeTracked(guildId, id) {
   store.save();
 }
 
-module.exports = { setupStreamAlerts, listTracked, addTracked, removeTracked };
+module.exports = { setupStreamAlerts, listTracked, addTracked, removeTracked, MAX_TRACKED_PER_GUILD };

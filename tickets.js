@@ -9,7 +9,7 @@
 const {
   ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits,
 } = require('discord.js');
-const { makeGuildStore } = require('./guildStore');
+const { makeGuildStore, safeAssign } = require('./guildStore');
 const { t } = require('./i18n');
 const { brandFooter } = require('./brand');
 
@@ -414,7 +414,7 @@ function getConfig(guildId) {
 }
 
 function updateConfig(guildId, patch) {
-  const config = Object.assign(configStore.get(guildId), patch);
+  const config = safeAssign(configStore.get(guildId), patch);
   configStore.save();
   return config;
 }
@@ -440,7 +440,7 @@ function updatePanel(guildId, panelId, patch) {
   const config = configStore.get(guildId);
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) throw new Error('Panel not found.');
-  Object.assign(panel, patch);
+  safeAssign(panel, patch);
   configStore.save();
   return config.panels;
 }

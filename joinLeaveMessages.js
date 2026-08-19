@@ -3,7 +3,7 @@
 // image (a fixed URL/upload — not a per-user generated card). Supports a
 // few placeholders so the same message adapts to whoever triggered it.
 const { EmbedBuilder } = require('discord.js');
-const { makeGuildStore } = require('./guildStore');
+const { makeGuildStore, safeAssign } = require('./guildStore');
 const { brandFooter } = require('./brand');
 
 const DEFAULT_MESSAGE = () => ({
@@ -74,8 +74,8 @@ function getConfig(guildId) {
 
 function updateConfig(guildId, patch) {
   const config = store.get(guildId);
-  if (patch.join) Object.assign(config.join, patch.join);
-  if (patch.leave) Object.assign(config.leave, patch.leave);
+  if (patch.join) safeAssign(config.join, patch.join);
+  if (patch.leave) safeAssign(config.leave, patch.leave);
   store.save();
   return config;
 }

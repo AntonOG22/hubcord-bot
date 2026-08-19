@@ -1,7 +1,7 @@
 // Per-server auto-moderation: link filter, invite filter, caps spam, mention spam,
 // duplicate-message spam, and a new-account age gate. Every server the bot manages
 // gets its own independent on/off switches and its own alerts channel.
-const { makeGuildStore } = require('./guildStore');
+const { makeGuildStore, safeAssign } = require('./guildStore');
 const guildConfig = require('./guildConfig');
 const features = require('./features');
 
@@ -116,7 +116,7 @@ function getConfig(guildId) {
 }
 
 function updateConfig(guildId, patch) {
-  const config = Object.assign(store.get(guildId), patch);
+  const config = safeAssign(store.get(guildId), patch);
   store.save();
   return config;
 }

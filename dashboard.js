@@ -139,6 +139,13 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
   function requireAuth(req, res, next) {
     if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
+    // Re-checked on every request, not just at login — otherwise blocking
+    // someone who already has a signed-in session (cookies last 30 days)
+    // would have no effect until it happened to expire on its own.
+    if (botSettings.isUserBlocked(req.session.userId)) {
+      req.session = null;
+      return res.status(403).json({ error: 'This account has been blocked from accessing the dashboard.' });
+    }
     next();
   }
 
@@ -166,6 +173,10 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   // same way, just against OWNER_DISCORD_ID instead of a Discord permission bit.
   async function requireGuildAccess(req, res, next) {
     if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
+    if (botSettings.isUserBlocked(req.session.userId)) {
+      req.session = null;
+      return res.status(403).json({ error: 'This account has been blocked from accessing the dashboard.' });
+    }
 
     const guildId = req.header('x-guild-id');
     if (!guildId) return res.status(400).json({ error: 'x-guild-id header is required' });
@@ -933,6 +944,13 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.post('/api/giveaways/:messageId/end', requireGuildAccess, async (req, res) => {
+    // giveaways.js stores everything in one flat messageId-keyed map, not
+    // scoped by guild — without this check, any server's admin could end
+    // any OTHER server's giveaway just by knowing/guessing its message ID.
+    const giveaway = giveaways.listGiveaways().find((g) => g.messageId === req.params.messageId);
+    if (giveaway && !req.guild.channels.cache.has(giveaway.channelId)) {
+      return res.status(404).json({ error: 'Giveaway not found' });
+    }
     try {
       await giveaways.endGiveawayNow(req.params.messageId);
       audit(req.guildId, 'Ended giveaway early', req.params.messageId);
@@ -958,6 +976,13 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.delete('/api/reminders/:id', requireGuildAccess, (req, res) => {
+    // Same as giveaways above: reminders.js is one flat array shared by every
+    // server, not keyed by guild — check the target reminder's channel is
+    // actually in this guild before letting the cancel through.
+    const reminder = reminders.listReminders().find((r) => r.id === req.params.id);
+    if (reminder && !req.guild.channels.cache.has(reminder.channelId)) {
+      return res.status(404).json({ error: 'Reminder not found' });
+    }
     reminders.cancelReminder(req.params.id);
     audit(req.guildId, 'Cancelled reminder', req.params.id);
     res.json({ ok: true });
@@ -1039,6 +1064,13 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.delete('/api/reaction-roles/:messageId', requireGuildAccess, (req, res) => {
+    // Same pattern again: reactionRoles.js keeps one flat array for every
+    // server. Without this check, any server's admin could remove any OTHER
+    // server's reaction-role mapping just by knowing/guessing its message ID.
+    const mapping = reactionRoles.listReactionRoles().find((m) => m.messageId === req.params.messageId);
+    if (mapping && !req.guild.channels.cache.has(mapping.channelId)) {
+      return res.status(404).json({ error: 'Reaction role not found' });
+    }
     reactionRoles.removeReactionRole(req.params.messageId);
     audit(req.guildId, 'Removed reaction role', req.params.messageId);
     res.json({ ok: true });
@@ -1241,6 +1273,13 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     // no role lookup, everything else must be an actual role in this server.
     if (pingRoleId && pingRoleId !== 'everyone' && !req.guild.roles.cache.has(pingRoleId)) {
       return res.status(400).json({ error: 'That role is not in this server' });
+    }
+    // Without a cap, one server could add unbounded entries — since Twitch
+    // checks are batched across every server sharing this process, that would
+    // degrade or break stream alerts for every OTHER server too, not just this
+    // one (Twitch's Helix API also hard-caps a single request at 100 logins).
+    if (streamAlerts.listTracked(req.guildId).length >= streamAlerts.MAX_TRACKED_PER_GUILD) {
+      return res.status(400).json({ error: `This server is already tracking the maximum of ${streamAlerts.MAX_TRACKED_PER_GUILD} channels — remove one first.` });
     }
 
     const entry = streamAlerts.addTracked(req.guildId, { platform, identifier, notifyChannelId, pingRoleId: pingRoleId || null });

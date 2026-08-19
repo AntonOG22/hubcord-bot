@@ -22,6 +22,23 @@ try {
   console.error('Could not set up Supabase client, falling back to local file storage only:', err.message);
 }
 
+// Object.assign(target, patch) is unsafe whenever `patch` is a client-supplied
+// JSON body: JSON.parse creates "__proto__" as a literal own property (not the
+// exotic internal slot), but Object.assign's [[Set]] semantics then invoke
+// Object.prototype's real __proto__ *setter* when copying that key over,
+// silently replacing the target object's actual prototype with attacker-
+// controlled data (e.g. POST { "__proto__": { "toJSON": "x" } } to any config
+// endpoint). Every module that merges a request body into stored config goes
+// through this instead of Object.assign directly.
+function safeAssign(target, patch) {
+  if (!patch || typeof patch !== 'object') return target;
+  for (const key of Object.keys(patch)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    target[key] = patch[key];
+  }
+  return target;
+}
+
 const registeredStores = []; // for preloadAll()
 
 function makeGuildStore(fileName, makeDefaults) {
@@ -116,4 +133,4 @@ async function preloadAll() {
   }
 }
 
-module.exports = { makeGuildStore, preloadAll };
+module.exports = { makeGuildStore, preloadAll, safeAssign };

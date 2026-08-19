@@ -3,7 +3,7 @@
 // post to. The original server (from .env) keeps working exactly as before via
 // setHomeDefaults — any other server the bot joins starts with these unset, and the
 // owner configures them per-server from the dashboard's Server tab.
-const { makeGuildStore } = require('./guildStore');
+const { makeGuildStore, safeAssign } = require('./guildStore');
 
 const store = makeGuildStore('guild-config.json', () => ({
   countingChannelId: null,
@@ -40,7 +40,7 @@ function getConfig(guildId) {
 
 function updateConfig(guildId, patch) {
   const state = store.get(guildId);
-  Object.assign(state, patch);
+  safeAssign(state, patch);
   store.save();
   return getConfig(guildId);
 }
