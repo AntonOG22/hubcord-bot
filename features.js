@@ -9,6 +9,7 @@
 // everything on, the historical default — adding this never silently
 // disables anything for existing servers).
 const guildConfig = require('./guildConfig');
+const botSettings = require('./botSettings');
 
 const FEATURES = [
   { key: 'xp', label: 'XP / Leveling', description: 'Members earn XP from chatting and appear on the leaderboard.' },
@@ -24,6 +25,7 @@ const FEATURES = [
 ];
 
 function isEnabled(guildId, key) {
+  if (botSettings.getGlobalDisabledFeatures().includes(key)) return false; // owner-level kill-switch wins over any per-server setting
   const disabled = guildConfig.getConfig(guildId).disabledFeatures || [];
   return !disabled.includes(key);
 }
@@ -38,7 +40,12 @@ function setEnabled(guildId, key, enabled) {
 
 function listWithState(guildId) {
   const disabled = new Set(guildConfig.getConfig(guildId).disabledFeatures || []);
-  return FEATURES.map((f) => ({ ...f, enabled: !disabled.has(f.key) }));
+  const globalDisabled = new Set(botSettings.getGlobalDisabledFeatures());
+  return FEATURES.map((f) => ({
+    ...f,
+    enabled: !disabled.has(f.key) && !globalDisabled.has(f.key),
+    globallyDisabled: globalDisabled.has(f.key), // this server's own toggle can't override it — shown as a note in the UI
+  }));
 }
 
 module.exports = { FEATURES, isEnabled, setEnabled, listWithState };

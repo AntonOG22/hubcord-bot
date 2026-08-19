@@ -270,6 +270,11 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       const token = await exchangeCode({ clientId, clientSecret, redirectUri: getRedirectUri(req), code });
       const user = await fetchDiscordUser(token.access_token);
 
+      if (botSettings.isUserBlocked(user.id)) {
+        recordLoginFailure(req.ip);
+        return res.redirect('/?auth_error=blocked');
+      }
+
       req.session.userId = user.id;
       req.session.username = `${user.username}${user.discriminator && user.discriminator !== '0' ? `#${user.discriminator}` : ''}`;
       req.session.avatar = user.avatar
@@ -374,6 +379,64 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const settings = botSettings.setWatermarkDisabled(!!disabled);
     audit('_global', 'Toggled bot watermark', settings.watermarkDisabled ? 'disabled' : 'enabled');
     res.json(settings);
+  });
+
+  // ---------- Global feature kill-switch ----------
+  // Sits above each server's own per-guild toggle (features.js) — flipping
+  // one of these off here disables it everywhere immediately, regardless of
+  // what any individual server has it set to. Meant for shutting something
+  // off fast (cost spike, abuse, a bug) without visiting every server.
+  app.get('/api/admin/global-features', requireOwner, (req, res) => {
+    const disabled = new Set(botSettings.getGlobalDisabledFeatures());
+    res.json(features.FEATURES.map((f) => ({ ...f, enabled: !disabled.has(f.key) })));
+  });
+
+  app.post('/api/admin/global-features/:key/toggle', requireOwner, (req, res) => {
+    const { key } = req.params;
+    if (!features.FEATURES.some((f) => f.key === key)) return res.status(404).json({ error: 'Unknown feature' });
+    const { enabled } = req.body || {};
+    botSettings.setGlobalFeatureEnabled(key, !!enabled);
+    audit('_global', 'Toggled global feature kill-switch', `${key}: ${enabled ? 'enabled' : 'disabled everywhere'}`);
+    const disabled = new Set(botSettings.getGlobalDisabledFeatures());
+    res.json(features.FEATURES.map((f) => ({ ...f, enabled: !disabled.has(f.key) })));
+  });
+
+  // ---------- Leave a server ----------
+  // Removes the bot from a server entirely — for abusive or inactive
+  // servers the owner wants gone without needing Discord's own app UI.
+  app.delete('/api/admin/guilds/:guildId', requireOwner, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.guildId);
+    if (!guild) return res.status(404).json({ error: 'Server not found' });
+    const name = guild.name;
+    try {
+      await guild.leave();
+      audit('_global', 'Bot left a server', `${name} (${req.params.guildId})`);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Failed to leave server' });
+    }
+  });
+
+  // ---------- Login blocklist ----------
+  // Checked in /auth/callback, before any session is created — a blocked
+  // user is turned away at login, never even getting a read-only session.
+  app.get('/api/admin/blocked-users', requireOwner, (req, res) => {
+    res.json({ blockedUserIds: botSettings.listBlockedUsers() });
+  });
+
+  app.post('/api/admin/blocked-users', requireOwner, (req, res) => {
+    const { userId } = req.body || {};
+    if (!userId || !/^\d{15,25}$/.test(String(userId))) return res.status(400).json({ error: 'A valid Discord user ID is required' });
+    if (String(userId) === OWNER_DISCORD_ID) return res.status(400).json({ error: "You can't block the owner account" });
+    const settings = botSettings.blockUser(userId);
+    audit('_global', 'Blocked a user from logging in', String(userId));
+    res.json({ blockedUserIds: settings.blockedUserIds });
+  });
+
+  app.delete('/api/admin/blocked-users/:userId', requireOwner, (req, res) => {
+    const settings = botSettings.unblockUser(req.params.userId);
+    audit('_global', 'Unblocked a user', req.params.userId);
+    res.json({ blockedUserIds: settings.blockedUserIds });
   });
 
   // Text channels of ANY guild the bot is in (not just ones the owner personally
@@ -1174,7 +1237,11 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     if (!['twitch', 'youtube'].includes(platform)) return res.status(400).json({ error: 'platform must be "twitch" or "youtube"' });
     if (!identifier || !String(identifier).trim()) return res.status(400).json({ error: 'identifier is required (Twitch username or YouTube channel ID)' });
     if (!notifyChannelId || !req.guild.channels.cache.has(notifyChannelId)) return res.status(400).json({ error: 'A valid notification channel in this server is required' });
-    if (pingRoleId && !req.guild.roles.cache.has(pingRoleId)) return res.status(400).json({ error: 'That role is not in this server' });
+    // "everyone" is a fixed sentinel, not a real role ID — @everyone/@here need
+    // no role lookup, everything else must be an actual role in this server.
+    if (pingRoleId && pingRoleId !== 'everyone' && !req.guild.roles.cache.has(pingRoleId)) {
+      return res.status(400).json({ error: 'That role is not in this server' });
+    }
 
     const entry = streamAlerts.addTracked(req.guildId, { platform, identifier, notifyChannelId, pingRoleId: pingRoleId || null });
     audit(req.guildId, 'Added stream alert', `${platform}: ${identifier}`);

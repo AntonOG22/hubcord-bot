@@ -106,15 +106,21 @@ async function fetchLatestYoutubeVideo(channelId) {
 
 // ---------- Notification sending ----------
 
+// entry.pingRoleId is either a real role snowflake, the fixed sentinel
+// "everyone" (not a role ID — @everyone/@here need their own mention syntax
+// and allowedMentions.parse, not allowedMentions.roles), or falsy for no ping.
+function buildPing(entry) {
+  if (!entry.pingRoleId) return { content: undefined, allowedMentions: undefined };
+  if (entry.pingRoleId === 'everyone') return { content: '@everyone', allowedMentions: { parse: ['everyone'] } };
+  return { content: `<@&${entry.pingRoleId}>`, allowedMentions: { roles: [entry.pingRoleId] } };
+}
+
 async function notify(entry, embed) {
   try {
     const channel = await clientRef.channels.fetch(entry.notifyChannelId);
     if (!channel || !channel.isTextBased()) return;
-    await channel.send({
-      content: entry.pingRoleId ? `<@&${entry.pingRoleId}>` : undefined,
-      embeds: [embed],
-      allowedMentions: entry.pingRoleId ? { roles: [entry.pingRoleId] } : undefined,
-    });
+    const { content, allowedMentions } = buildPing(entry);
+    await channel.send({ content, embeds: [embed], allowedMentions });
   } catch (err) {
     console.error(`Stream alert notify failed for ${entry.platform}/${entry.identifier}:`, err.message);
   }

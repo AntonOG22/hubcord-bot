@@ -780,8 +780,11 @@
             <input id="stream-alert-identifier" type="text" placeholder="e.g. shroud" />
             <label class="field-label" for="stream-alert-channel">Notification channel</label>
             <select id="stream-alert-channel"></select>
-            <label class="field-label" for="stream-alert-role">Ping role <span class="muted small">(optional)</span></label>
-            <select id="stream-alert-role"><option value="">— none —</option></select>
+            <label class="field-label" for="stream-alert-role">Ping <span class="muted small">(optional)</span></label>
+            <select id="stream-alert-role">
+              <option value="">— none —</option>
+              <option value="everyone">@everyone</option>
+            </select>
 
             <button id="stream-alert-btn" class="primary-button">Track</button>
             <p id="stream-alert-feedback" class="feedback-text"></p>
@@ -1037,6 +1040,23 @@
               </label>
             </div>
             <p id="admin-watermark-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Global Feature Kill-Switch</h2>
+            <p class="muted small">Turn a feature off everywhere, instantly, regardless of what any individual server has it set to — for a cost spike, abuse, or a bug you need to shut down fast without visiting every server one by one.</p>
+            <div id="admin-global-features" class="toggle-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Blocked Users</h2>
+            <p class="muted small">A blocked Discord account can't log into the dashboard at all — turned away right at login, before any session is created. Doesn't affect anything they can already do in Discord itself, only dashboard access.</p>
+            <div class="row">
+              <input id="admin-block-user-id" type="text" placeholder="Discord user ID…" />
+              <button id="admin-block-user-btn" class="danger-button">Block</button>
+            </div>
+            <p id="admin-block-user-feedback" class="feedback-text"></p>
+            <div id="admin-blocked-users-list" class="scroll-list"></div>
           </section>
 
           <section class="card wide">

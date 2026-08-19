@@ -40,6 +40,7 @@ function checkAuthError() {
   const MESSAGES = {
     state: 'Your login link expired or was already used — click "Login with Discord" to start a fresh one.',
     failed: "Login failed on Discord's side — this is usually temporary. Please try again in a moment.",
+    blocked: 'This account has been blocked from accessing the dashboard.',
   };
 
   banner.classList.remove('hidden');
@@ -438,7 +439,7 @@ async function populateCategorySelect(selectEl, { withNone } = {}) {
   }
 }
 
-async function populateRoleSelect(selectEl, { withNone } = {}) {
+async function populateRoleSelect(selectEl, { withNone, withEveryone } = {}) {
   const res = await api('/api/roles');
   if (!res.ok) return;
   const roles = await res.json();
@@ -449,6 +450,12 @@ async function populateRoleSelect(selectEl, { withNone } = {}) {
     none.value = '';
     none.textContent = '— none —';
     selectEl.appendChild(none);
+  }
+  if (withEveryone) {
+    const everyone = document.createElement('option');
+    everyone.value = 'everyone';
+    everyone.textContent = '@everyone';
+    selectEl.appendChild(everyone);
   }
   for (const r of roles) {
     const opt = document.createElement('option');
@@ -510,6 +517,8 @@ let adminPollTimer = null;
 
 function enterAdminTab() {
   loadAdminOverview();
+  refreshGlobalFeatures();
+  refreshBlockedUsers();
   if (adminPollTimer) return;
   adminPollTimer = setInterval(async () => {
     try {
@@ -568,10 +577,20 @@ async function loadAdminOverview() {
           </div>
           <div class="list-actions">
             <button class="secondary-button" data-admin-manage="${g.id}">Manage</button>
+            <button class="danger-button" data-admin-leave="${g.id}" data-admin-leave-name="${escapeHtml(g.name)}">Leave</button>
           </div>
         </div>`;
     })
     .join('');
+
+  list.querySelectorAll('[data-admin-leave]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Remove the bot from "${btn.dataset.adminLeaveName}"? It will need to be re-invited to come back.`)) return;
+      const res = await api(`/api/admin/guilds/${btn.dataset.adminLeave}`, { method: 'DELETE' });
+      if (res.ok) loadAdminOverview();
+      else alert('Failed to leave that server — try again.');
+    });
+  });
 
   list.querySelectorAll('[data-admin-manage]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -593,6 +612,95 @@ document.getElementById('admin-watermark-toggle').addEventListener('change', asy
   } else {
     e.target.checked = !disabled; // revert the visual toggle, the server didn't accept it
     setFeedback(feedback, 'Failed to save — try again.', false);
+  }
+});
+
+// ---------- Admin: global feature kill-switch ----------
+
+async function refreshGlobalFeatures() {
+  const res = await api('/api/admin/global-features');
+  if (!res.ok) return;
+  const list = await res.json();
+  const el = document.getElementById('admin-global-features');
+
+  el.innerHTML = list
+    .map(
+      (f) => `
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">${escapeHtml(f.label)}</div>
+          <div class="muted small">${escapeHtml(f.description)}</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" data-global-feature-key="${f.key}" ${f.enabled ? 'checked' : ''} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`
+    )
+    .join('');
+
+  el.querySelectorAll('[data-global-feature-key]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const key = input.dataset.globalFeatureKey;
+      const enabled = input.checked;
+      const res = await api(`/api/admin/global-features/${key}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
+      if (!res.ok) input.checked = !enabled; // revert on failure
+    });
+  });
+}
+
+// ---------- Admin: blocked users ----------
+
+async function refreshBlockedUsers() {
+  const res = await api('/api/admin/blocked-users');
+  if (!res.ok) return;
+  const { blockedUserIds } = await res.json();
+  const el = document.getElementById('admin-blocked-users-list');
+
+  if (blockedUserIds.length === 0) {
+    el.innerHTML = '<span class="empty-hint">No one is blocked.</span>';
+    return;
+  }
+
+  el.innerHTML = blockedUserIds
+    .map(
+      (id) => `
+      <div class="list-row">
+        <div class="list-main"><div class="list-title">User ID: ${escapeHtml(id)}</div></div>
+        <div class="list-actions">
+          <button class="secondary-button" data-unblock-user-id="${escapeHtml(id)}">Unblock</button>
+        </div>
+      </div>`
+    )
+    .join('');
+
+  el.querySelectorAll('[data-unblock-user-id]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/admin/blocked-users/${btn.dataset.unblockUserId}`, { method: 'DELETE' });
+      refreshBlockedUsers();
+    });
+  });
+}
+
+document.getElementById('admin-block-user-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('admin-block-user-feedback');
+  const input = document.getElementById('admin-block-user-id');
+  const userId = input.value.trim();
+
+  if (!/^\d{15,25}$/.test(userId)) {
+    setFeedback(feedback, 'Enter a valid Discord user ID (right-click their name in Discord → Copy User ID, Developer Mode must be on).', false);
+    return;
+  }
+  if (!confirm(`Block user ID ${userId} from logging into the dashboard?`)) return;
+
+  const res = await api('/api/admin/blocked-users', { method: 'POST', body: JSON.stringify({ userId }) });
+  if (res.ok) {
+    setFeedback(feedback, 'Blocked.', true);
+    input.value = '';
+    refreshBlockedUsers();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
   }
 });
 
@@ -671,7 +779,7 @@ function init() {
   populateChannelSelect(document.getElementById('giveaway-channel'));
   populateChannelSelect(document.getElementById('reminder-channel'));
   populateChannelSelect(document.getElementById('stream-alert-channel'));
-  populateRoleSelect(document.getElementById('stream-alert-role'), { withNone: true });
+  populateRoleSelect(document.getElementById('stream-alert-role'), { withNone: true, withEveryone: true });
   populateChannelSelect(document.getElementById('fun-channel'));
   populateChannelSelect(document.getElementById('rr-channel'));
   populateChannelSelect(document.getElementById('verification-channel'));
@@ -1634,7 +1742,7 @@ async function refreshStreamAlerts() {
       <div class="list-row">
         <div class="list-main">
           <div class="list-title">${icon} ${escapeHtml(s.identifier)}</div>
-          <div class="list-sub">${label} · Channel ID: ${escapeHtml(s.notifyChannelId)}${s.pingRoleId ? ` · pings a role` : ''}</div>
+          <div class="list-sub">${label} · Channel ID: ${escapeHtml(s.notifyChannelId)}${s.pingRoleId === 'everyone' ? ' · pings @everyone' : s.pingRoleId ? ' · pings a role' : ''}</div>
         </div>
         <div class="list-actions">
           <button class="danger-button" data-remove-stream-alert-id="${escapeHtml(s.id)}">Remove</button>
@@ -2188,10 +2296,10 @@ async function refreshFeatureToggles() {
       <div class="toggle-row">
         <div>
           <div class="toggle-label">${escapeHtml(f.label)}</div>
-          <div class="muted small">${escapeHtml(f.description)}</div>
+          <div class="muted small">${escapeHtml(f.description)}${f.globallyDisabled ? ' <strong>· turned off bot-wide by the owner right now, this switch has no effect until they turn it back on</strong>' : ''}</div>
         </div>
         <label class="toggle-switch">
-          <input type="checkbox" data-feature-key="${f.key}" ${f.enabled ? 'checked' : ''} />
+          <input type="checkbox" data-feature-key="${f.key}" ${f.enabled ? 'checked' : ''} ${f.globallyDisabled ? 'disabled' : ''} />
           <span class="toggle-slider"></span>
         </label>
       </div>`
