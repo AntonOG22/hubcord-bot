@@ -133,17 +133,36 @@ wireImageUpload('leavemsg-image-file', 'leavemsg-image', 'leavemsg-image-feedbac
 
 // ---------- @mention member autocomplete ----------
 //
-// Any "User ID" field can be filled by typing @ followed by part of a
-// username instead of pasting a raw ID — mirrors Discord's own message box.
-// Selecting a result replaces the whole field with that member's ID, since
-// these fields only ever hold a single ID, never mixed free text.
+// Works in every text field on the dashboard, not just dedicated "User ID"
+// ones — type @ followed by part of a name to search this server's members
+// AND roles live, tagged so it's obvious which is which, same as Discord's
+// own message box.
+//
+// Two insertion modes, chosen per field:
+//  - "id" fields (the handful that only ever hold a single raw ID, like the
+//    Warnings User ID box) — selecting a result replaces the whole field
+//    with that ID, since a mention token would break the API call it feeds.
+//  - Every other field — a real Discord mention (<@id> / <@&id>) is spliced
+//    in at the cursor, so it works fine mixed into a longer message.
+const MENTION_ID_ONLY_FIELDS = new Set(['warn-user-id', 'dm-user-id', 'fun-target']);
+const MENTION_EXCLUDED_FIELDS = new Set(['member-search', 'feature-search-input', 'cmd-search']);
 
-function wireMentionAutocomplete(inputId) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
+let mentionRolesCache = { guildId: null, roles: [] };
+
+async function getMentionRoles() {
+  if (mentionRolesCache.guildId === selectedGuildId) return mentionRolesCache.roles;
+  const res = await api('/api/roles');
+  const roles = res.ok ? await res.json() : [];
+  mentionRolesCache = { guildId: selectedGuildId, roles };
+  return roles;
+}
+
+function wireMentionAutocomplete(input) {
+  const idOnly = MENTION_ID_ONLY_FIELDS.has(input.id);
 
   let dropdown = null;
   let debounceTimer = null;
+  let atIndex = -1;
 
   function closeDropdown() {
     if (dropdown) {
@@ -160,22 +179,47 @@ function wireMentionAutocomplete(inputId) {
     dropdown.style.width = `${Math.max(rect.width, 220)}px`;
   }
 
-  function renderResults(members) {
+  function selectResult(type, id) {
+    if (idOnly) {
+      input.value = id;
+    } else {
+      const value = input.value;
+      const caret = input.selectionStart;
+      const token = type === 'role' ? `<@&${id}> ` : `<@${id}> `;
+      const newValue = value.slice(0, atIndex) + token + value.slice(caret);
+      input.value = newValue;
+      const newCaret = atIndex + token.length;
+      input.focus();
+      input.setSelectionRange(newCaret, newCaret);
+    }
     closeDropdown();
+  }
+
+  function renderResults(members, roles) {
+    closeDropdown();
+    const rows = [
+      ...roles.map((r) => ({ type: 'role', id: r.id, label: r.name, sub: 'Role', color: r.color })),
+      ...members.map((m) => ({ type: 'user', id: m.id, label: m.tag, sub: 'User', avatar: m.avatar })),
+    ].slice(0, 10);
+
     dropdown = document.createElement('div');
     dropdown.className = 'mention-dropdown';
-    dropdown.innerHTML = members.length
-      ? members
-          .slice(0, 8)
+    dropdown.innerHTML = rows.length
+      ? rows
           .map(
-            (m) => `
-        <div class="mention-result" data-id="${m.id}">
-          <img src="${m.avatar}" alt="" />
-          <span>${escapeHtml(m.tag)}</span>
+            (r) => `
+        <div class="mention-result" data-type="${r.type}" data-id="${r.id}">
+          ${
+            r.type === 'role'
+              ? `<span class="mention-role-dot" style="background:${r.color || '#99aab5'}"></span>`
+              : `<img src="${r.avatar}" alt="" />`
+          }
+          <span class="mention-label">${escapeHtml(r.label)}</span>
+          <span class="mention-tag mention-tag-${r.type}">${r.sub}</span>
         </div>`
           )
           .join('')
-      : '<div class="mention-empty">No matching members</div>';
+      : '<div class="mention-empty">No matching members or roles</div>';
 
     document.body.appendChild(dropdown);
     positionDropdown();
@@ -185,25 +229,30 @@ function wireMentionAutocomplete(inputId) {
       // dropdown is still there to read from when the user clicks it.
       row.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        input.value = row.dataset.id;
-        closeDropdown();
+        selectResult(row.dataset.type, row.dataset.id);
       });
     });
   }
 
   input.addEventListener('input', () => {
     const value = input.value;
-    const atIndex = value.lastIndexOf('@');
-    if (atIndex === -1) {
+    const caret = input.selectionStart;
+    const textBeforeCaret = value.slice(0, caret);
+    const foundAt = textBeforeCaret.lastIndexOf('@');
+    if (foundAt === -1 || /\s/.test(textBeforeCaret.slice(foundAt + 1))) {
       closeDropdown();
       return;
     }
-    const query = value.slice(atIndex + 1);
+    atIndex = foundAt;
+    const query = textBeforeCaret.slice(foundAt + 1);
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
-      const res = await api(`/api/members?search=${encodeURIComponent(query)}`);
-      if (!res.ok) return;
-      renderResults(await res.json());
+      const [membersRes, roles] = await Promise.all([api(`/api/members?search=${encodeURIComponent(query)}`), getMentionRoles()]);
+      const members = membersRes.ok ? await membersRes.json() : [];
+      const matchingRoles = query
+        ? roles.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()))
+        : roles;
+      renderResults(members, matchingRoles.slice(0, 5));
     }, 200);
   });
 
@@ -211,9 +260,10 @@ function wireMentionAutocomplete(inputId) {
   window.addEventListener('scroll', () => dropdown && positionDropdown(), true);
 }
 
-wireMentionAutocomplete('warn-user-id');
-wireMentionAutocomplete('dm-user-id');
-wireMentionAutocomplete('fun-target');
+document.querySelectorAll('input[type="text"], textarea').forEach((el) => {
+  if (MENTION_EXCLUDED_FIELDS.has(el.id)) return;
+  wireMentionAutocomplete(el);
+});
 
 async function boot() {
   try {
