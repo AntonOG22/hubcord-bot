@@ -88,19 +88,17 @@ code {
   color: var(--accent-text);
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+/* Scrolling stays fully functional everywhere (mouse wheel, trackpad,
+   touch, keyboard) — only the visible scrollbar track/thumb is removed,
+   on every scrollable element on the page, not just a few named ones. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge / IE */
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border-radius: 6px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border);
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, new Edge */
+  width: 0;
+  height: 0;
 }
 
 button {
