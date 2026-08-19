@@ -322,8 +322,15 @@
             <label class="field-label" for="color-input">Embed color</label>
             <input id="color-input" type="color" value="#3fe8d6" />
 
-            <label class="field-label" for="image-input">Image URL <span class="muted small">(optional — also turns a plain message into an embed)</span></label>
-            <input id="image-input" type="text" placeholder="https://…" />
+            <label class="field-label" for="image-input">Image <span class="muted small">(optional — also turns a plain message into an embed)</span></label>
+            <div class="image-field">
+              <input id="image-input" type="text" placeholder="https://… or upload a file" />
+              <label class="upload-btn">
+                <span class="upload-btn-text">Upload</span>
+                <input id="image-input-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only" />
+              </label>
+            </div>
+            <p id="image-input-feedback" class="feedback-text small"></p>
 
             <label class="field-label" for="message-input">Message</label>
             <textarea id="message-input" rows="5" placeholder="Write your message here…"></textarea>
@@ -456,10 +463,15 @@
             <div class="row">
               <input id="customcmd-response" type="text" placeholder="Response text" />
             </div>
-            <div class="row">
-              <input id="customcmd-image" type="text" placeholder="Image URL (optional)" />
+            <div class="row image-field">
+              <input id="customcmd-image" type="text" placeholder="Image URL (optional) or upload a file" />
+              <label class="upload-btn">
+                <span class="upload-btn-text">Upload</span>
+                <input id="customcmd-image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only" />
+              </label>
               <button id="customcmd-add-btn" class="primary-button">Add</button>
             </div>
+            <p id="customcmd-image-feedback" class="feedback-text small"></p>
             <p id="customcmd-feedback" class="feedback-text"></p>
             <div id="customcmd-list" class="scroll-list"></div>
           </section>
@@ -770,8 +782,15 @@
             <input id="joinmsg-title" type="text" placeholder="Welcome!" />
             <label class="field-label" for="joinmsg-description">Description</label>
             <input id="joinmsg-description" type="text" placeholder="Welcome {user} to {server}! We now have {membercount} members." />
-            <label class="field-label" for="joinmsg-image">Image URL (optional)</label>
-            <input id="joinmsg-image" type="text" placeholder="https://…" />
+            <label class="field-label" for="joinmsg-image">Image (optional)</label>
+            <div class="image-field">
+              <input id="joinmsg-image" type="text" placeholder="https://… or upload a file" />
+              <label class="upload-btn">
+                <span class="upload-btn-text">Upload</span>
+                <input id="joinmsg-image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only" />
+              </label>
+            </div>
+            <p id="joinmsg-image-feedback" class="feedback-text small"></p>
             <label class="field-label" for="joinmsg-color">Color</label>
             <input id="joinmsg-color" type="color" value="#3ecf8e" />
 
@@ -788,8 +807,15 @@
             <input id="leavemsg-title" type="text" placeholder="Goodbye!" />
             <label class="field-label" for="leavemsg-description">Description</label>
             <input id="leavemsg-description" type="text" placeholder="{username} has left {server}." />
-            <label class="field-label" for="leavemsg-image">Image URL (optional)</label>
-            <input id="leavemsg-image" type="text" placeholder="https://…" />
+            <label class="field-label" for="leavemsg-image">Image (optional)</label>
+            <div class="image-field">
+              <input id="leavemsg-image" type="text" placeholder="https://… or upload a file" />
+              <label class="upload-btn">
+                <span class="upload-btn-text">Upload</span>
+                <input id="leavemsg-image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only" />
+              </label>
+            </div>
+            <p id="leavemsg-image-feedback" class="feedback-text small"></p>
             <label class="field-label" for="leavemsg-color">Color</label>
             <input id="leavemsg-color" type="color" value="#f0655f" />
 

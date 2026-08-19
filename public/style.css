@@ -194,6 +194,42 @@ button {
   min-height: 100vh;
 }
 
+.image-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.image-field input[type="text"] {
+  flex: 1;
+}
+
+.upload-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.upload-btn:hover {
+  background: var(--border);
+}
+
+.upload-btn.uploading {
+  opacity: 0.6;
+  cursor: wait;
+  pointer-events: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

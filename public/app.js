@@ -78,6 +78,59 @@ function checkAuthError() {
 
 checkAuthError();
 
+// ---------- Image upload ----------
+//
+// Every "image URL" field also accepts a direct file upload as an
+// alternative to pasting a link — links are fragile (hotlink protection,
+// deleted images, expired CDN links), an uploaded file keeps working
+// indefinitely. Uploading just fills in the same URL text field every
+// other part of the page already reads, so nothing downstream needs to
+// know the difference.
+async function uploadImageFile(file, urlInputId, feedbackId, btnEl) {
+  const feedback = document.getElementById(feedbackId);
+  const urlInput = document.getElementById(urlInputId);
+  const label = btnEl.querySelector('.upload-btn-text');
+  const originalText = label.textContent;
+  btnEl.classList.add('uploading');
+  label.textContent = 'Uploading…';
+
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    const headers = {};
+    if (selectedGuildId) headers['x-guild-id'] = selectedGuildId;
+    const res = await fetch('/api/upload-image', { method: 'POST', credentials: 'same-origin', headers, body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      urlInput.value = data.url;
+      if (feedback) setFeedback(feedback, 'Uploaded!', true);
+    } else {
+      if (feedback) setFeedback(feedback, `Failed: ${data.error || 'unknown error'}`, false);
+    }
+  } catch {
+    if (feedback) setFeedback(feedback, 'Upload failed — try again.', false);
+  } finally {
+    btnEl.classList.remove('uploading');
+    label.textContent = originalText;
+  }
+}
+
+function wireImageUpload(fileInputId, urlInputId, feedbackId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (!fileInput) return;
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    uploadImageFile(file, urlInputId, feedbackId, fileInput.closest('.upload-btn'));
+    fileInput.value = '';
+  });
+}
+
+wireImageUpload('image-input-file', 'image-input', 'image-input-feedback');
+wireImageUpload('customcmd-image-file', 'customcmd-image', 'customcmd-image-feedback');
+wireImageUpload('joinmsg-image-file', 'joinmsg-image', 'joinmsg-image-feedback');
+wireImageUpload('leavemsg-image-file', 'leavemsg-image', 'leavemsg-image-feedback');
+
 async function boot() {
   try {
     const res = await api('/api/me');

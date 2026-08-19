@@ -7,6 +7,7 @@
 // A user who fails any of these gets a 401/403 — there is no path from "logged in"
 // to "can touch guild X" that skips this chain. See requireGuildAccess() below.
 const path = require('path');
+const multer = require('multer');
 const crypto = require('crypto');
 const express = require('express');
 const cookieSession = require('cookie-session');
@@ -39,6 +40,7 @@ const { brandFooter } = require('./brand');
 const botSettings = require('./botSettings');
 const features = require('./features');
 const joinLeaveMessages = require('./joinLeaveMessages');
+const imageUpload = require('./imageUpload');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -1051,6 +1053,33 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const config = guildConfig.updateConfig(req.guildId, patch);
     audit(req.guildId, 'Updated server settings', Object.keys(patch).join(', '));
     res.json(config);
+  });
+
+  // ---------- Image uploads ----------
+  // Used anywhere the dashboard takes an "image URL" (join/leave messages,
+  // Send a Message, custom commands) as an alternative to pasting a link —
+  // uploads go to a public Supabase Storage bucket and the resulting
+  // permanent URL is used exactly like a pasted one everywhere else.
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+  // multer's own errors (file too big, etc.) surface through its callback,
+  // not the usual middleware chain — wrapped here so they come back as the
+  // same JSON error shape as everything else instead of an HTML error page.
+  function uploadSingleImage(req, res, next) {
+    upload.single('image')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+      next();
+    });
+  }
+
+  app.post('/api/upload-image', requireGuildAccess, uploadSingleImage, async (req, res) => {
+    try {
+      const url = await imageUpload.uploadImage(req.guildId, req.file);
+      audit(req.guildId, 'Uploaded image', req.file?.originalname || 'image');
+      res.json({ url });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   // ---------- Join / leave messages ----------
