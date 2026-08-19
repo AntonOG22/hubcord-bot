@@ -546,6 +546,13 @@ async function loadAdminOverview() {
   document.getElementById('admin-bot-uptime').textContent = formatUptime(data.botUptimeMs);
   document.getElementById('admin-watermark-toggle').checked = !!data.watermarkDisabled;
 
+  const announceGuildSelect = document.getElementById('admin-announce-guild');
+  const previousChoice = announceGuildSelect.value;
+  announceGuildSelect.innerHTML =
+    '<option value="">— select a server —</option>' +
+    data.guilds.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join('');
+  if (previousChoice && data.guilds.some((g) => g.id === previousChoice)) announceGuildSelect.value = previousChoice;
+
   const list = document.getElementById('admin-guild-list');
   list.innerHTML = data.guilds
     .map((g) => {
@@ -586,6 +593,54 @@ document.getElementById('admin-watermark-toggle').addEventListener('change', asy
   } else {
     e.target.checked = !disabled; // revert the visual toggle, the server didn't accept it
     setFeedback(feedback, 'Failed to save — try again.', false);
+  }
+});
+
+document.getElementById('admin-announce-guild').addEventListener('change', async (e) => {
+  const channelSelect = document.getElementById('admin-announce-channel');
+  const guildId = e.target.value;
+  if (!guildId) {
+    channelSelect.innerHTML = '<option value="">— select a server first —</option>';
+    return;
+  }
+  channelSelect.innerHTML = '<option value="">Loading channels…</option>';
+  const res = await api(`/api/admin/guilds/${guildId}/channels`);
+  if (!res.ok) {
+    channelSelect.innerHTML = '<option value="">Failed to load channels</option>';
+    return;
+  }
+  const { channels } = await res.json();
+  channelSelect.innerHTML =
+    '<option value="">— select a channel —</option>' +
+    channels.map((c) => `<option value="${escapeHtml(c.id)}">#${escapeHtml(c.name)}</option>`).join('');
+});
+
+document.getElementById('admin-announce-send').addEventListener('click', async () => {
+  const feedback = document.getElementById('admin-announce-feedback');
+  const guildId = document.getElementById('admin-announce-guild').value;
+  const channelId = document.getElementById('admin-announce-channel').value;
+  const title = document.getElementById('admin-announce-title').value.trim();
+  const message = document.getElementById('admin-announce-message').value.trim();
+
+  if (!guildId || !channelId || !title || !message) {
+    setFeedback(feedback, 'Pick a server and channel, and fill in both title and message.', false);
+    return;
+  }
+  const guildName = document.getElementById('admin-announce-guild').selectedOptions[0]?.textContent || 'this server';
+  const channelName = document.getElementById('admin-announce-channel').selectedOptions[0]?.textContent || 'the selected channel';
+  if (!confirm(`Send this official announcement to ${channelName} in ${guildName}? This posts immediately and can't be unsent automatically.`)) return;
+
+  const btn = document.getElementById('admin-announce-send');
+  btn.disabled = true;
+  const res = await api('/api/admin/announcement', { method: 'POST', body: JSON.stringify({ guildId, channelId, title, message }) });
+  btn.disabled = false;
+  if (res.ok) {
+    setFeedback(feedback, 'Official announcement sent.', true);
+    document.getElementById('admin-announce-title').value = '';
+    document.getElementById('admin-announce-message').value = '';
+  } else {
+    const err = await res.json().catch(() => ({}));
+    setFeedback(feedback, err.error || 'Failed to send — try again.', false);
   }
 });
 

@@ -1018,6 +1018,26 @@
           </section>
 
           <section class="card wide">
+            <h2>Official Announcement</h2>
+            <p class="muted small">Post a message to any server the bot is in, styled so it's unmistakably from the Emerald team — a fixed green color, the official Emerald author badge, and a "✅ Verified official message" footer that no regular server admin can reproduce, since this exact template only exists behind this owner-only panel.</p>
+
+            <label class="field-label" for="admin-announce-guild">Server</label>
+            <select id="admin-announce-guild"><option value="">— select a server —</option></select>
+
+            <label class="field-label" for="admin-announce-channel">Channel</label>
+            <select id="admin-announce-channel"><option value="">— select a server first —</option></select>
+
+            <label class="field-label" for="admin-announce-title">Title</label>
+            <input id="admin-announce-title" type="text" placeholder="e.g. New Feature: Custom Commands" maxlength="200" />
+
+            <label class="field-label" for="admin-announce-message">Message</label>
+            <textarea id="admin-announce-message" rows="5" placeholder="Write the official announcement…" maxlength="4000"></textarea>
+
+            <button id="admin-announce-send" class="primary-button">Send Official Announcement</button>
+            <p id="admin-announce-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
             <h2>Every Server</h2>
             <p class="muted small">Jump straight into any server's full dashboard — moderation, tickets, automod, everything — regardless of your own permissions there.</p>
             <div id="admin-guild-list" class="scroll-list tall"></div>

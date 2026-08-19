@@ -64,6 +64,25 @@ const ANNOUNCEMENT_TEMPLATES = {
 
 const NUMBER_EMOJI = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
+// Fixed template for official cross-server announcements sent from the owner
+// admin panel. Deliberately NOT configurable through any input field (color,
+// author name/icon, and footer text are hardcoded here, not accepted from
+// the request body) — the only things an owner can vary are the title and
+// message text. That's what makes these recognizable as genuinely official:
+// no server admin can produce this exact look through anything the dashboard
+// exposes to them, because the /api/admin/announcement route itself is
+// behind requireOwner and this template is baked into server code, not data.
+function buildOfficialAnnouncementEmbed(client, { title, message }) {
+  const botAvatar = client.user?.displayAvatarURL({ size: 128 }) || null;
+  return new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setAuthor({ name: 'Emerald — Official Announcement', iconURL: botAvatar || undefined })
+    .setTitle(`📢 ${title}`)
+    .setDescription(message)
+    .setFooter({ text: '✅ Verified official message — sent directly by the Emerald team', iconURL: botAvatar || undefined })
+    .setTimestamp();
+}
+
 // The single Discord user ID allowed into the owner/admin panel. This is a
 // server-side constant, never read from anything the client sends — the
 // browser has no way to influence this value. Access is decided purely by
@@ -354,6 +373,42 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const settings = botSettings.setWatermarkDisabled(!!disabled);
     audit('_global', 'Toggled bot watermark', settings.watermarkDisabled ? 'disabled' : 'enabled');
     res.json(settings);
+  });
+
+  // Text channels of ANY guild the bot is in (not just ones the owner personally
+  // manages) — needed so the owner can pick a target for an official announcement
+  // regardless of their own permissions there.
+  app.get('/api/admin/guilds/:guildId/channels', requireOwner, (req, res) => {
+    const guild = client.guilds.cache.get(req.params.guildId);
+    if (!guild) return res.status(404).json({ error: 'Server not found' });
+    const channels = guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildText && c.viewable)
+      .map((c) => ({ id: c.id, name: c.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ channels });
+  });
+
+  app.post('/api/admin/announcement', requireOwner, async (req, res) => {
+    const { guildId, channelId, title, message } = req.body || {};
+    if (!guildId || !channelId || !title || !message) {
+      return res.status(400).json({ error: 'guildId, channelId, title, and message are all required' });
+    }
+    if (String(title).length > 200) return res.status(400).json({ error: 'Title is too long (max 200 characters)' });
+    if (String(message).length > 4000) return res.status(400).json({ error: 'Message is too long (max 4000 characters)' });
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return res.status(404).json({ error: 'Server not found' });
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel || channel.type !== ChannelType.GuildText) return res.status(404).json({ error: 'Channel not found' });
+
+    try {
+      const embed = buildOfficialAnnouncementEmbed(client, { title: String(title), message: String(message) });
+      await channel.send({ embeds: [embed] });
+      audit(guildId, 'Sent official Emerald announcement', `#${channel.name}: ${title}`);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Failed to send announcement' });
+    }
   });
 
   app.get('/api/invite-url', requireAuth, (req, res) => {
