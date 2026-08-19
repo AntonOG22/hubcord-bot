@@ -441,6 +441,11 @@ function init() {
     populateRoleSelect(document.getElementById('settings-announcement-ping-role'), { withNone: true }),
   ]).then(refreshGuildSettings);
 
+  Promise.all([
+    populateChannelSelect(document.getElementById('joinmsg-channel'), { withNone: true }),
+    populateChannelSelect(document.getElementById('leavemsg-channel'), { withNone: true }),
+  ]).then(refreshJoinLeaveConfig);
+
   populateChannelSelect(document.getElementById('ticket-post-channel'));
   Promise.all([
     populateCategorySelect(document.getElementById('ticket-closed-category'), { withNone: true }),
@@ -489,6 +494,7 @@ function init() {
   document.getElementById('cmd-prefix-save-btn').addEventListener('click', saveCommandPrefix);
   document.getElementById('cmd-search').addEventListener('input', () => renderCommandList());
   document.getElementById('settings-save-btn').addEventListener('click', saveGuildSettings);
+  document.getElementById('joinleave-save-btn').addEventListener('click', saveJoinLeaveConfig);
   document.getElementById('ticket-config-save-btn').addEventListener('click', saveTicketConfig);
   document.getElementById('ticket-panel-add-btn').addEventListener('click', addTicketPanel);
   document.getElementById('ticket-post-btn').addEventListener('click', postTicketPanel);
@@ -531,6 +537,7 @@ function refreshEverything() {
   refreshCustomCommands();
   refreshRolePanels();
   refreshGuildSettings();
+  refreshJoinLeaveConfig();
   refreshFeatureToggles();
   refreshTicketConfig();
 }
@@ -817,6 +824,7 @@ async function sendMessage() {
   const channelId = document.getElementById('channel-select').value;
   const title = document.getElementById('title-input').value.trim();
   const color = document.getElementById('color-input').value;
+  const imageUrl = document.getElementById('image-input').value.trim();
   const message = document.getElementById('message-input').value.trim();
 
   if (!channelId || !message) {
@@ -828,13 +836,14 @@ async function sendMessage() {
   button.textContent = 'Sending…';
 
   try {
-    const res = await api('/api/send', { method: 'POST', body: JSON.stringify({ channelId, message, title: title || undefined, color }) });
+    const res = await api('/api/send', { method: 'POST', body: JSON.stringify({ channelId, message, title: title || undefined, color, imageUrl: imageUrl || undefined }) });
     const data = await res.json();
 
     if (res.ok) {
       setFeedback(feedback, 'Sent!', true);
       document.getElementById('message-input').value = '';
       document.getElementById('title-input').value = '';
+      document.getElementById('image-input').value = '';
       refreshAuditLog();
     } else {
       setFeedback(feedback, `Failed: ${data.error || 'unknown error'}`, false);
@@ -1568,12 +1577,14 @@ async function addCustomCommand() {
   const feedback = document.getElementById('customcmd-feedback');
   const name = document.getElementById('customcmd-name').value.trim();
   const response = document.getElementById('customcmd-response').value.trim();
+  const imageUrl = document.getElementById('customcmd-image').value.trim();
   if (!name || !response) return setFeedback(feedback, 'Give it a name and a response.', false);
 
-  const res = await api('/api/custom-commands', { method: 'POST', body: JSON.stringify({ name, response }) });
+  const res = await api('/api/custom-commands', { method: 'POST', body: JSON.stringify({ name, response, imageUrl: imageUrl || undefined }) });
   if (res.ok) {
     document.getElementById('customcmd-name').value = '';
     document.getElementById('customcmd-response').value = '';
+    document.getElementById('customcmd-image').value = '';
     setFeedback(feedback, 'Added!', true);
     refreshCustomCommands();
     refreshAuditLog();
@@ -1722,6 +1733,57 @@ async function postRolePanel(panelId) {
   } else {
     const data = await res.json();
     alert(`Could not post: ${data.error}`);
+  }
+}
+
+// ---------- Join / leave messages ----------
+
+async function refreshJoinLeaveConfig() {
+  const res = await api('/api/join-leave-config');
+  if (!res.ok) return;
+  const config = await res.json();
+
+  document.getElementById('joinmsg-enabled').checked = !!config.join.enabled;
+  document.getElementById('joinmsg-channel').value = config.join.channelId || '';
+  document.getElementById('joinmsg-title').value = config.join.title || '';
+  document.getElementById('joinmsg-description').value = config.join.description || '';
+  document.getElementById('joinmsg-image').value = config.join.imageUrl || '';
+  document.getElementById('joinmsg-color').value = config.join.color || '#3ecf8e';
+
+  document.getElementById('leavemsg-enabled').checked = !!config.leave.enabled;
+  document.getElementById('leavemsg-channel').value = config.leave.channelId || '';
+  document.getElementById('leavemsg-title').value = config.leave.title || '';
+  document.getElementById('leavemsg-description').value = config.leave.description || '';
+  document.getElementById('leavemsg-image').value = config.leave.imageUrl || '';
+  document.getElementById('leavemsg-color').value = config.leave.color || '#f0655f';
+}
+
+async function saveJoinLeaveConfig() {
+  const feedback = document.getElementById('joinleave-feedback');
+  const patch = {
+    join: {
+      enabled: document.getElementById('joinmsg-enabled').checked,
+      channelId: document.getElementById('joinmsg-channel').value || null,
+      title: document.getElementById('joinmsg-title').value,
+      description: document.getElementById('joinmsg-description').value,
+      imageUrl: document.getElementById('joinmsg-image').value,
+      color: document.getElementById('joinmsg-color').value,
+    },
+    leave: {
+      enabled: document.getElementById('leavemsg-enabled').checked,
+      channelId: document.getElementById('leavemsg-channel').value || null,
+      title: document.getElementById('leavemsg-title').value,
+      description: document.getElementById('leavemsg-description').value,
+      imageUrl: document.getElementById('leavemsg-image').value,
+      color: document.getElementById('leavemsg-color').value,
+    },
+  };
+  const res = await api('/api/join-leave-config', { method: 'POST', body: JSON.stringify(patch) });
+  if (res.ok) {
+    setFeedback(feedback, 'Saved!', true);
+    refreshAuditLog();
+  } else {
+    setFeedback(feedback, 'Failed to save.', false);
   }
 }
 
@@ -2216,6 +2278,7 @@ const FEATURE_INDEX = [
   { label: 'Auto-Responses', tab: 'automation' },
   { label: 'Giveaways', tab: 'automation' },
   { label: 'Reminders', tab: 'automation' },
+  { label: 'Join & Leave Messages', tab: 'automation' },
 
   { label: 'Leaderboard / XP', tab: 'leveling' },
 

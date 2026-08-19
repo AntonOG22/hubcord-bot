@@ -45,12 +45,13 @@ function setupCommandHandler(client, ctx) {
       const custom = customCommands.find(message.guild.id, commandName);
       if (!custom) return;
       try {
-        if (custom.embedTitle) {
+        if (custom.embedTitle || custom.imageUrl) {
           const embed = new EmbedBuilder()
-            .setTitle(custom.embedTitle)
             .setDescription(custom.response)
             .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
             .setFooter(brandFooter(message.client));
+          if (custom.embedTitle) embed.setTitle(custom.embedTitle);
+          if (custom.imageUrl) embed.setImage(custom.imageUrl);
           await message.reply({ embeds: [embed] });
         } else {
           await message.reply(custom.response);

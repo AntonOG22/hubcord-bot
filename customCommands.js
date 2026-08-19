@@ -19,13 +19,19 @@ function find(guildId, name) {
   return store.get(guildId).find((c) => c.name === sanitizeName(name));
 }
 
-function add(guildId, { name, response, embedTitle, color }) {
+function add(guildId, { name, response, embedTitle, color, imageUrl }) {
   const commands = store.get(guildId);
   const cleanName = sanitizeName(name);
   if (!cleanName) throw new Error('Give the command a name using letters, numbers, - or _.');
   if (!response || !response.trim()) throw new Error('The command needs a response.');
   if (commands.some((c) => c.name === cleanName)) throw new Error(`A custom command named "${cleanName}" already exists.`);
-  commands.push({ name: cleanName, response: response.trim(), embedTitle: embedTitle || null, color: color || null });
+  commands.push({
+    name: cleanName,
+    response: response.trim(),
+    embedTitle: embedTitle || null,
+    color: color || null,
+    imageUrl: imageUrl || null,
+  });
   store.save();
   return commands;
 }

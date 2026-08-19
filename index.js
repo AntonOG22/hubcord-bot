@@ -19,6 +19,7 @@ const { setupCommandHandler } = require('./commandHandler');
 const guildConfig = require('./guildConfig');
 const { setupTickets } = require('./tickets');
 const { setupRolePanels } = require('./rolePanels');
+const { setupJoinLeaveMessages } = require('./joinLeaveMessages');
 const { preloadAll } = require('./guildStore');
 
 patchConsole();
@@ -64,6 +65,7 @@ client.once('ready', async () => {
   setupStats(client);
   setupTickets(client);
   setupRolePanels(client);
+  setupJoinLeaveMessages(client);
   verificationGate.setupVerificationGate(client);
 
   setupCommandHandler(client, { client });

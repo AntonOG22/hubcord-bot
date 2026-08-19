@@ -322,6 +322,9 @@
             <label class="field-label" for="color-input">Embed color</label>
             <input id="color-input" type="color" value="#3fe8d6" />
 
+            <label class="field-label" for="image-input">Image URL <span class="muted small">(optional — also turns a plain message into an embed)</span></label>
+            <input id="image-input" type="text" placeholder="https://…" />
+
             <label class="field-label" for="message-input">Message</label>
             <textarea id="message-input" rows="5" placeholder="Write your message here…"></textarea>
 
@@ -452,6 +455,9 @@
             </div>
             <div class="row">
               <input id="customcmd-response" type="text" placeholder="Response text" />
+            </div>
+            <div class="row">
+              <input id="customcmd-image" type="text" placeholder="Image URL (optional)" />
               <button id="customcmd-add-btn" class="primary-button">Add</button>
             </div>
             <p id="customcmd-feedback" class="feedback-text"></p>
@@ -745,6 +751,50 @@
             <button id="reminder-btn" class="primary-button">Schedule</button>
             <p id="reminder-feedback" class="feedback-text"></p>
             <div id="reminder-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Join &amp; Leave Messages</h2>
+            <p class="muted small">Optional announcement when someone joins or leaves, with an optional fixed image. Placeholders: <code>{user}</code>, <code>{username}</code>, <code>{server}</code>, <code>{membercount}</code>.</p>
+
+            <div class="toggle-row">
+              <span class="toggle-label">Join message</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="joinmsg-enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label class="field-label" for="joinmsg-channel">Channel</label>
+            <select id="joinmsg-channel"></select>
+            <label class="field-label" for="joinmsg-title">Title (optional)</label>
+            <input id="joinmsg-title" type="text" placeholder="Welcome!" />
+            <label class="field-label" for="joinmsg-description">Description</label>
+            <input id="joinmsg-description" type="text" placeholder="Welcome {user} to {server}! We now have {membercount} members." />
+            <label class="field-label" for="joinmsg-image">Image URL (optional)</label>
+            <input id="joinmsg-image" type="text" placeholder="https://…" />
+            <label class="field-label" for="joinmsg-color">Color</label>
+            <input id="joinmsg-color" type="color" value="#3ecf8e" />
+
+            <div class="toggle-row" style="margin-top:22px">
+              <span class="toggle-label">Leave message</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="leavemsg-enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label class="field-label" for="leavemsg-channel">Channel</label>
+            <select id="leavemsg-channel"></select>
+            <label class="field-label" for="leavemsg-title">Title (optional)</label>
+            <input id="leavemsg-title" type="text" placeholder="Goodbye!" />
+            <label class="field-label" for="leavemsg-description">Description</label>
+            <input id="leavemsg-description" type="text" placeholder="{username} has left {server}." />
+            <label class="field-label" for="leavemsg-image">Image URL (optional)</label>
+            <input id="leavemsg-image" type="text" placeholder="https://…" />
+            <label class="field-label" for="leavemsg-color">Color</label>
+            <input id="leavemsg-color" type="color" value="#f0655f" />
+
+            <button id="joinleave-save-btn" class="primary-button">Save Join/Leave Messages</button>
+            <p id="joinleave-feedback" class="feedback-text"></p>
           </section>
 
         </div>

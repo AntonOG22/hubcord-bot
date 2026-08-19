@@ -38,6 +38,7 @@ const customCommands = require('./customCommands');
 const { brandFooter } = require('./brand');
 const botSettings = require('./botSettings');
 const features = require('./features');
+const joinLeaveMessages = require('./joinLeaveMessages');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -425,7 +426,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   // ---------- Messaging ----------
 
   app.post('/api/send', requireGuildAccess, async (req, res) => {
-    const { channelId, message, title, color } = req.body || {};
+    const { channelId, message, title, color, imageUrl } = req.body || {};
     if (!channelId || !message) return res.status(400).json({ error: 'channelId and message are required' });
     if (!req.guild.channels.cache.has(channelId)) return res.status(400).json({ error: 'That channel is not in this server' });
 
@@ -433,13 +434,14 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       const channel = await client.channels.fetch(channelId);
       if (!channel || !channel.isTextBased()) return res.status(400).json({ error: 'Not a text channel' });
 
-      if (title) {
+      if (title || imageUrl) {
         const embed = new EmbedBuilder()
-          .setTitle(title)
           .setDescription(message)
           .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x3fe8d6)
           .setFooter(brandFooter(client))
           .setTimestamp();
+        if (title) embed.setTitle(title);
+        if (imageUrl) embed.setImage(imageUrl);
         await channel.send({ embeds: [embed] });
       } else {
         await channel.send({ content: message });
@@ -1048,6 +1050,19 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const patch = req.body || {};
     const config = guildConfig.updateConfig(req.guildId, patch);
     audit(req.guildId, 'Updated server settings', Object.keys(patch).join(', '));
+    res.json(config);
+  });
+
+  // ---------- Join / leave messages ----------
+
+  app.get('/api/join-leave-config', requireGuildAccess, (req, res) => {
+    res.json(joinLeaveMessages.getConfig(req.guildId));
+  });
+
+  app.post('/api/join-leave-config', requireGuildAccess, (req, res) => {
+    const patch = req.body || {};
+    const config = joinLeaveMessages.updateConfig(req.guildId, patch);
+    audit(req.guildId, 'Updated join/leave messages', Object.keys(patch).join(', '));
     res.json(config);
   });
 

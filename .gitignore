@@ -19,3 +19,6 @@ automod-state.json
 reactionroles-state.json
 stats-state.json
 verification-state.json
+custom-commands.json
+bot-settings.json
+join-leave-config.json

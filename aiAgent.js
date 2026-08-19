@@ -101,14 +101,15 @@ const TOOLS = [
     name: 'send_message',
     method: 'POST',
     path: '/api/send',
-    description: 'Post a message into a channel as the bot. If title is given, it is posted as an embed.',
+    description: 'Post a message into a channel as the bot. If title or imageUrl is given, it is posted as an embed.',
     parameters: {
       type: 'object',
       properties: {
         channelId: { type: 'string' },
         message: { type: 'string', description: 'Message body / embed description' },
         title: { type: 'string', description: 'Optional embed title — omit for a plain message' },
-        color: { type: 'string', description: 'Optional hex color like #17e88f, only used with title' },
+        color: { type: 'string', description: 'Optional hex color like #17e88f, only used with title/imageUrl' },
+        imageUrl: { type: 'string', description: 'Optional image URL to attach to the embed' },
       },
       required: ['channelId', 'message'],
     },
@@ -428,6 +429,7 @@ const TOOLS = [
         response: { type: 'string', description: 'What the bot replies with' },
         embedTitle: { type: 'string', description: 'Optional — if set, the response is posted as an embed with this title' },
         color: { type: 'string', description: 'Optional hex color for the embed' },
+        imageUrl: { type: 'string', description: 'Optional image URL attached to the embed (also makes the response an embed even without embedTitle)' },
       },
       required: ['name', 'response'],
     },
@@ -480,6 +482,47 @@ const TOOLS = [
     path: '/api/commands/:name/toggle',
     description: 'Enable or disable a specific chat command for this server.',
     parameters: { type: 'object', properties: { name: { type: 'string', description: 'Command name' }, disabled: { type: 'boolean' } }, required: ['name', 'disabled'] },
+  },
+  {
+    name: 'get_join_leave_messages',
+    method: 'GET',
+    path: '/api/join-leave-config',
+    description: 'Read the current join and leave message configuration for this server.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'update_join_leave_messages',
+    method: 'POST',
+    path: '/api/join-leave-config',
+    description: 'Configure the message posted when a member joins or leaves. Placeholders available in title/description: {user} (mention), {username}, {server}, {membercount}. Provide a "join" and/or "leave" object with only the fields being changed; set enabled:true to turn it on.',
+    parameters: {
+      type: 'object',
+      properties: {
+        join: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean' },
+            channelId: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            imageUrl: { type: 'string', description: 'Optional fixed image shown on every join' },
+            color: { type: 'string' },
+          },
+        },
+        leave: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean' },
+            channelId: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            imageUrl: { type: 'string', description: 'Optional fixed image shown on every leave' },
+            color: { type: 'string' },
+          },
+        },
+      },
+      required: [],
+    },
   },
   {
     name: 'list_features',
