@@ -91,6 +91,8 @@ async function fetchLatestYoutubeVideo(channelId) {
   const title = entry.match(/<title>(.*?)<\/title>/)?.[1];
   const channelName = xml.match(/<name>(.*?)<\/name>/)?.[1];
   const thumbnail = entry.match(/<media:thumbnail url="(.*?)"/)?.[1];
+  const publishedRaw = entry.match(/<published>(.*?)<\/published>/)?.[1];
+  const publishedAt = publishedRaw ? new Date(publishedRaw) : null;
 
   return {
     videoId,
@@ -98,6 +100,7 @@ async function fetchLatestYoutubeVideo(channelId) {
     channelName: decodeXmlEntities(channelName) || 'YouTube',
     thumbnail: thumbnail || null,
     url: `https://www.youtube.com/watch?v=${videoId}`,
+    publishedAt: publishedAt && !isNaN(publishedAt) ? publishedAt : null,
   };
 }
 
@@ -187,6 +190,18 @@ async function pollYoutube(entriesByGuild) {
     const isFirstCheck = !entry.state.lastVideoId;
     entry.state.lastVideoId = video.videoId;
     if (isFirstCheck) continue;
+
+    // Second safety net on top of the first-check skip above: never announce
+    // a video whose own publish timestamp is more than a day old, no matter
+    // why it looked "new" to us (a missed poll, a channel re-track, a video
+    // that only just went public after being scheduled/premiered weeks ago,
+    // etc). The state is still updated above so this video won't be re-
+    // evaluated on the next poll either way.
+    const MAX_ANNOUNCE_AGE_MS = 24 * 60 * 60 * 1000;
+    if (video.publishedAt && Date.now() - video.publishedAt.getTime() > MAX_ANNOUNCE_AGE_MS) {
+      console.log(`Skipping stale YouTube alert for ${entry.identifier}: "${video.title}" was published ${video.publishedAt.toISOString()}`);
+      continue;
+    }
 
     const embed = new EmbedBuilder()
       .setColor(YOUTUBE_COLOR)
