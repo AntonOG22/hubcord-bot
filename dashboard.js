@@ -201,6 +201,31 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     loginAttempts.delete(ip);
   }
 
+  // Simple per-user sliding-window rate limiter for endpoints that cost real
+  // money or storage per call (Mistral AI requests, image uploads) — without
+  // this, any logged-in user could hammer these in a loop and run up costs
+  // or fill storage, even though they're otherwise correctly auth-gated.
+  // Keyed by session userId (falls back to IP pre-login, though both routes
+  // already require a session via requireGuildAccess).
+  function makeRateLimiter({ windowMs, max }) {
+    const hits = new Map(); // key -> array of timestamps
+    return function rateLimit(req, res, next) {
+      const key = req.session?.userId || req.ip;
+      const now = Date.now();
+      const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
+      if (recent.length >= max) {
+        const retryAfter = Math.ceil((windowMs - (now - recent[0])) / 1000);
+        res.set('Retry-After', String(retryAfter));
+        return res.status(429).json({ error: 'Too many requests, please slow down.', retryAfter });
+      }
+      recent.push(now);
+      hits.set(key, recent);
+      next();
+    };
+  }
+  const aiChatRateLimit = makeRateLimiter({ windowMs: 60 * 1000, max: 12 }); // ~1 msg/5s sustained
+  const uploadRateLimit = makeRateLimiter({ windowMs: 60 * 1000, max: 20 });
+
   app.get('/auth/login', (req, res) => {
     const state = loginState(req.ip);
     if (state.lockedUntil > Date.now()) {
@@ -1072,7 +1097,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     });
   }
 
-  app.post('/api/upload-image', requireGuildAccess, uploadSingleImage, async (req, res) => {
+  app.post('/api/upload-image', requireGuildAccess, uploadRateLimit, uploadSingleImage, async (req, res) => {
     try {
       const url = await imageUpload.uploadImage(req.guildId, req.file);
       audit(req.guildId, 'Uploaded image', req.file?.originalname || 'image');
@@ -1293,7 +1318,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   // error messages is something a normal dashboard user should have to
   // parse. Full detail always goes to the server log via console.error;
   // the browser only ever gets a flat "failed, try again".
-  app.post('/api/ai/chat', requireGuildAccess, async (req, res) => {
+  app.post('/api/ai/chat', requireGuildAccess, aiChatRateLimit, async (req, res) => {
     if (!MISTRAL_API_KEY) {
       console.error('AI agent used without MISTRAL_API_KEY configured');
       return res.status(503).json({ failed: true });

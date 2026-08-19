@@ -832,15 +832,29 @@ async function refreshMembers(search) {
           <div class="list-sub">${roleChips || '<span class="muted">No roles</span>'}</div>
         </div>
         <div class="list-actions">
-          <button class="secondary-button" onclick="openRoleMenu('${m.id}')">Roles</button>
-          <button class="secondary-button" onclick="timeoutMember('${m.id}', '${escapeHtml(m.tag)}')">Timeout</button>
-          <button class="danger-button" onclick="kickMember('${m.id}', '${escapeHtml(m.tag)}')">Kick</button>
-          <button class="danger-button" onclick="banMember('${m.id}', '${escapeHtml(m.tag)}')">Ban</button>
+          <button class="secondary-button" data-member-action="roles" data-member-id="${escapeHtml(m.id)}">Roles</button>
+          <button class="secondary-button" data-member-action="timeout" data-member-id="${escapeHtml(m.id)}" data-member-tag="${escapeHtml(m.tag)}">Timeout</button>
+          <button class="danger-button" data-member-action="kick" data-member-id="${escapeHtml(m.id)}" data-member-tag="${escapeHtml(m.tag)}">Kick</button>
+          <button class="danger-button" data-member-action="ban" data-member-id="${escapeHtml(m.id)}" data-member-tag="${escapeHtml(m.tag)}">Ban</button>
         </div>
       </div>
     `;
     })
     .join('');
+
+  // data-* attributes instead of inline onclick="fn('${tag}')" — a Discord
+  // display name containing a quote character could otherwise break out of
+  // the inline handler's JS string and run arbitrary script. dataset reads
+  // back the raw text safely, no re-parsing as code.
+  el.querySelectorAll('[data-member-action]').forEach((btn) => {
+    const { memberAction, memberId, memberTag } = btn.dataset;
+    btn.addEventListener('click', () => {
+      if (memberAction === 'roles') openRoleMenu(memberId);
+      else if (memberAction === 'timeout') timeoutMember(memberId, memberTag);
+      else if (memberAction === 'kick') kickMember(memberId, memberTag);
+      else if (memberAction === 'ban') banMember(memberId, memberTag);
+    });
+  });
 }
 
 async function kickMember(userId, tag) {
@@ -904,12 +918,16 @@ async function refreshBans() {
           <div class="list-sub">${b.reason ? escapeHtml(b.reason) : 'No reason given'}</div>
         </div>
         <div class="list-actions">
-          <button class="secondary-button" onclick="unbanUser('${b.id}')">Unban</button>
+          <button class="secondary-button" data-unban-id="${escapeHtml(b.id)}">Unban</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-unban-id]').forEach((btn) => {
+    btn.addEventListener('click', () => unbanUser(btn.dataset.unbanId));
+  });
 }
 
 async function unbanUser(userId) {
@@ -1184,12 +1202,16 @@ async function refreshWarned() {
           <div class="list-sub">${w.count} warning${w.count === 1 ? '' : 's'}</div>
         </div>
         <div class="list-actions">
-          <button class="secondary-button" onclick="clearWarnings('${w.userId}')">Clear</button>
+          <button class="secondary-button" data-clear-warnings-id="${escapeHtml(w.userId)}">Clear</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-clear-warnings-id]').forEach((btn) => {
+    btn.addEventListener('click', () => clearWarnings(btn.dataset.clearWarningsId));
+  });
 }
 
 async function warnMember() {
@@ -1274,12 +1296,16 @@ async function refreshStickies() {
           <div class="list-sub">Channel ID: ${s.channelId}</div>
         </div>
         <div class="list-actions">
-          <button class="danger-button" onclick="removeSticky('${s.channelId}')">Remove</button>
+          <button class="danger-button" data-remove-sticky-id="${escapeHtml(s.channelId)}">Remove</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-remove-sticky-id]').forEach((btn) => {
+    btn.addEventListener('click', () => removeSticky(btn.dataset.removeStickyId));
+  });
 }
 
 async function setSticky() {
@@ -1332,12 +1358,16 @@ async function refreshAutoResponses() {
           <div class="list-title">"${escapeHtml(r.trigger)}" → ${escapeHtml(r.reply)}</div>
         </div>
         <div class="list-actions">
-          <button class="danger-button" onclick="removeAutoResponse('${r.id}')">Remove</button>
+          <button class="danger-button" data-remove-autoresponse-id="${escapeHtml(r.id)}">Remove</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-remove-autoresponse-id]').forEach((btn) => {
+    btn.addEventListener('click', () => removeAutoResponse(btn.dataset.removeAutoresponseId));
+  });
 }
 
 async function addAutoResponse() {
@@ -1393,11 +1423,15 @@ async function refreshGiveaways() {
           <div class="list-title">🎉 ${escapeHtml(g.prize)}</div>
           <div class="list-sub">${g.ended ? `Ended · ${g.winners?.length || 0} winner(s)` : `Ends ${new Date(g.endsAt).toLocaleString()}`}</div>
         </div>
-        ${g.ended ? '' : `<div class="list-actions"><button class="danger-button" onclick="endGiveaway('${g.messageId}')">End Now</button></div>`}
+        ${g.ended ? '' : `<div class="list-actions"><button class="danger-button" data-end-giveaway-id="${escapeHtml(g.messageId)}">End Now</button></div>`}
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-end-giveaway-id]').forEach((btn) => {
+    btn.addEventListener('click', () => endGiveaway(btn.dataset.endGiveawayId));
+  });
 }
 
 async function startGiveaway() {
@@ -1454,12 +1488,16 @@ async function refreshReminders() {
           <div class="list-sub">${new Date(r.sendAt).toLocaleString()}</div>
         </div>
         <div class="list-actions">
-          <button class="danger-button" onclick="cancelReminder('${r.id}')">Cancel</button>
+          <button class="danger-button" data-cancel-reminder-id="${escapeHtml(r.id)}">Cancel</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-cancel-reminder-id]').forEach((btn) => {
+    btn.addEventListener('click', () => cancelReminder(btn.dataset.cancelReminderId));
+  });
 }
 
 async function scheduleReminder() {
@@ -2323,15 +2361,19 @@ async function refreshReactionRoles() {
       (r) => `
       <div class="list-row">
         <div class="list-main">
-          <div class="list-title">${r.emoji} → role ${r.roleId}</div>
+          <div class="list-title">${escapeHtml(r.emoji)} → role ${escapeHtml(r.roleId)}</div>
         </div>
         <div class="list-actions">
-          <button class="danger-button" onclick="removeReactionRole('${r.messageId}')">Remove</button>
+          <button class="danger-button" data-remove-reactionrole-id="${escapeHtml(r.messageId)}">Remove</button>
         </div>
       </div>
     `
     )
     .join('');
+
+  el.querySelectorAll('[data-remove-reactionrole-id]').forEach((btn) => {
+    btn.addEventListener('click', () => removeReactionRole(btn.dataset.removeReactionroleId));
+  });
 }
 
 async function createReactionRole() {
