@@ -767,6 +767,28 @@
           </section>
 
           <section class="card wide">
+            <h2>Stream Alerts</h2>
+            <p class="muted small">Posts a message with a colored side stripe and a link whenever a tracked Twitch channel goes live, or a tracked YouTube channel uploads a new video.</p>
+            <p id="stream-alerts-twitch-note" class="feedback-text small hidden"></p>
+
+            <label class="field-label" for="stream-alert-platform">Platform</label>
+            <select id="stream-alert-platform">
+              <option value="twitch">Twitch (go-live)</option>
+              <option value="youtube">YouTube (new video)</option>
+            </select>
+            <label class="field-label" for="stream-alert-identifier" id="stream-alert-identifier-label">Twitch username</label>
+            <input id="stream-alert-identifier" type="text" placeholder="e.g. shroud" />
+            <label class="field-label" for="stream-alert-channel">Notification channel</label>
+            <select id="stream-alert-channel"></select>
+            <label class="field-label" for="stream-alert-role">Ping role <span class="muted small">(optional)</span></label>
+            <select id="stream-alert-role"><option value="">— none —</option></select>
+
+            <button id="stream-alert-btn" class="primary-button">Track</button>
+            <p id="stream-alert-feedback" class="feedback-text"></p>
+            <div id="stream-alert-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
             <h2>Join &amp; Leave Messages</h2>
             <p class="muted small">Optional announcement when someone joins or leaves, with an optional fixed image. Placeholders: <code>{user}</code>, <code>{username}</code>, <code>{server}</code>, <code>{membercount}</code>.</p>
 

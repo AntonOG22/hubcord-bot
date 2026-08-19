@@ -20,6 +20,7 @@ const FEATURES = [
   { key: 'stickyMessages', label: 'Sticky Messages', description: 'Messages that stay pinned to the bottom of a channel.' },
   { key: 'autoResponses', label: 'Auto-Responses', description: 'Automatic replies when a message contains a trigger word.' },
   { key: 'reactionRoles', label: 'Reaction Roles', description: 'Reacting to a message to get/remove a role.' },
+  { key: 'streamAlerts', label: 'Stream Alerts', description: 'Twitch go-live and YouTube new-video notifications.' },
 ];
 
 function isEnabled(guildId, key) {

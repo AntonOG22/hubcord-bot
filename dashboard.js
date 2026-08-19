@@ -41,6 +41,7 @@ const botSettings = require('./botSettings');
 const features = require('./features');
 const joinLeaveMessages = require('./joinLeaveMessages');
 const imageUpload = require('./imageUpload');
+const streamAlerts = require('./streamAlerts');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -1160,6 +1161,30 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  // ---------- Stream alerts (Twitch live / YouTube new video) ----------
+
+  app.get('/api/stream-alerts', requireGuildAccess, (req, res) => {
+    res.json({ tracked: streamAlerts.listTracked(req.guildId), twitchConfigured: !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) });
+  });
+
+  app.post('/api/stream-alerts', requireGuildAccess, (req, res) => {
+    const { platform, identifier, notifyChannelId, pingRoleId } = req.body || {};
+    if (!['twitch', 'youtube'].includes(platform)) return res.status(400).json({ error: 'platform must be "twitch" or "youtube"' });
+    if (!identifier || !String(identifier).trim()) return res.status(400).json({ error: 'identifier is required (Twitch username or YouTube channel ID)' });
+    if (!notifyChannelId || !req.guild.channels.cache.has(notifyChannelId)) return res.status(400).json({ error: 'A valid notification channel in this server is required' });
+    if (pingRoleId && !req.guild.roles.cache.has(pingRoleId)) return res.status(400).json({ error: 'That role is not in this server' });
+
+    const entry = streamAlerts.addTracked(req.guildId, { platform, identifier, notifyChannelId, pingRoleId: pingRoleId || null });
+    audit(req.guildId, 'Added stream alert', `${platform}: ${identifier}`);
+    res.json(entry);
+  });
+
+  app.delete('/api/stream-alerts/:id', requireGuildAccess, (req, res) => {
+    streamAlerts.removeTracked(req.guildId, req.params.id);
+    audit(req.guildId, 'Removed stream alert', req.params.id);
+    res.json({ ok: true });
   });
 
   // ---------- Join / leave messages ----------

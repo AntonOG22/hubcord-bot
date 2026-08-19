@@ -670,6 +670,8 @@ function init() {
   populateChannelSelect(document.getElementById('sticky-channel'));
   populateChannelSelect(document.getElementById('giveaway-channel'));
   populateChannelSelect(document.getElementById('reminder-channel'));
+  populateChannelSelect(document.getElementById('stream-alert-channel'));
+  populateRoleSelect(document.getElementById('stream-alert-role'), { withNone: true });
   populateChannelSelect(document.getElementById('fun-channel'));
   populateChannelSelect(document.getElementById('rr-channel'));
   populateChannelSelect(document.getElementById('verification-channel'));
@@ -704,6 +706,7 @@ function init() {
   setInterval(refreshLeaderboard, 15000);
   setInterval(refreshGiveaways, 10000);
   setInterval(refreshReminders, 10000);
+  setInterval(refreshStreamAlerts, 20000);
   setInterval(refreshInsights, 20000);
   setInterval(refreshOpenTickets, 10000);
   setInterval(refreshClosedTickets, 15000);
@@ -727,6 +730,8 @@ function init() {
   document.getElementById('autoresponse-btn').addEventListener('click', addAutoResponse);
   document.getElementById('giveaway-btn').addEventListener('click', startGiveaway);
   document.getElementById('reminder-btn').addEventListener('click', scheduleReminder);
+  document.getElementById('stream-alert-btn').addEventListener('click', addStreamAlert);
+  document.getElementById('stream-alert-platform').addEventListener('change', updateStreamAlertPlatformFields);
   document.getElementById('automod-save-btn').addEventListener('click', saveAutomod);
   document.getElementById('lockdown-on-btn').addEventListener('click', () => setLockdown(true));
   document.getElementById('lockdown-off-btn').addEventListener('click', () => setLockdown(false));
@@ -767,6 +772,7 @@ function refreshEverything() {
   refreshAutoResponses();
   refreshGiveaways();
   refreshReminders();
+  refreshStreamAlerts();
   refreshAutomod();
   refreshVerification();
   refreshReactionRoles();
@@ -1583,6 +1589,94 @@ async function scheduleReminder() {
 async function cancelReminder(id) {
   await api(`/api/reminders/${id}`, { method: 'DELETE' });
   refreshReminders();
+  refreshAuditLog();
+}
+
+// ---------- Automation: stream alerts (Twitch live / YouTube new video) ----------
+
+function updateStreamAlertPlatformFields() {
+  const platform = document.getElementById('stream-alert-platform').value;
+  const label = document.getElementById('stream-alert-identifier-label');
+  const input = document.getElementById('stream-alert-identifier');
+  if (platform === 'youtube') {
+    label.textContent = 'YouTube channel ID';
+    input.placeholder = 'e.g. UCxxxxxxxxxxxxxxxxxxxxxx';
+  } else {
+    label.textContent = 'Twitch username';
+    input.placeholder = 'e.g. shroud';
+  }
+}
+
+async function refreshStreamAlerts() {
+  const res = await api('/api/stream-alerts');
+  const el = document.getElementById('stream-alert-list');
+  const note = document.getElementById('stream-alerts-twitch-note');
+  if (!res.ok) return;
+  const { tracked, twitchConfigured } = await res.json();
+
+  if (!twitchConfigured) {
+    note.textContent = 'Twitch live alerts aren\'t configured on the bot yet (YouTube alerts still work) — ask the bot owner to add Twitch API credentials.';
+    note.classList.remove('hidden');
+  } else {
+    note.classList.add('hidden');
+  }
+
+  if (tracked.length === 0) {
+    el.innerHTML = '<span class="empty-hint">Not tracking any channels yet.</span>';
+    return;
+  }
+
+  el.innerHTML = tracked
+    .map((s) => {
+      const icon = s.platform === 'twitch' ? '🟣' : '🔴';
+      const label = s.platform === 'twitch' ? 'Twitch' : 'YouTube';
+      return `
+      <div class="list-row">
+        <div class="list-main">
+          <div class="list-title">${icon} ${escapeHtml(s.identifier)}</div>
+          <div class="list-sub">${label} · Channel ID: ${escapeHtml(s.notifyChannelId)}${s.pingRoleId ? ` · pings a role` : ''}</div>
+        </div>
+        <div class="list-actions">
+          <button class="danger-button" data-remove-stream-alert-id="${escapeHtml(s.id)}">Remove</button>
+        </div>
+      </div>
+    `;
+    })
+    .join('');
+
+  el.querySelectorAll('[data-remove-stream-alert-id]').forEach((btn) => {
+    btn.addEventListener('click', () => removeStreamAlert(btn.dataset.removeStreamAlertId));
+  });
+}
+
+async function addStreamAlert() {
+  const feedback = document.getElementById('stream-alert-feedback');
+  const platform = document.getElementById('stream-alert-platform').value;
+  const identifier = document.getElementById('stream-alert-identifier').value.trim();
+  const notifyChannelId = document.getElementById('stream-alert-channel').value;
+  const pingRoleId = document.getElementById('stream-alert-role').value || null;
+
+  if (!identifier || !notifyChannelId) {
+    setFeedback(feedback, 'Fill in the channel/username and pick a notification channel.', false);
+    return;
+  }
+
+  const res = await api('/api/stream-alerts', { method: 'POST', body: JSON.stringify({ platform, identifier, notifyChannelId, pingRoleId }) });
+
+  if (res.ok) {
+    setFeedback(feedback, 'Tracking!', true);
+    document.getElementById('stream-alert-identifier').value = '';
+    refreshStreamAlerts();
+    refreshAuditLog();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
+  }
+}
+
+async function removeStreamAlert(id) {
+  await api(`/api/stream-alerts/${id}`, { method: 'DELETE' });
+  refreshStreamAlerts();
   refreshAuditLog();
 }
 
@@ -2563,6 +2657,7 @@ const FEATURE_INDEX = [
   { label: 'Giveaways', tab: 'automation' },
   { label: 'Reminders', tab: 'automation' },
   { label: 'Join & Leave Messages', tab: 'automation' },
+  { label: 'Stream Alerts (Twitch/YouTube)', tab: 'automation' },
 
   { label: 'Leaderboard / XP', tab: 'leveling' },
 
