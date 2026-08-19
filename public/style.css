@@ -227,15 +227,16 @@ button {
 }
 
 .brand-mark {
-  font-size: 1.05rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
+  padding: 4px;
   border-radius: 7px;
   background: var(--accent-soft);
   flex-shrink: 0;
+  object-fit: contain;
 }
 
 .brand-name {
@@ -269,17 +270,24 @@ button {
 
 .appbar-search-icon {
   position: absolute;
-  left: 11px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.8rem;
-  opacity: 0.6;
+  line-height: 1;
+  opacity: 0.55;
   pointer-events: none;
 }
 
-.appbar-search input {
+.appbar-search input,
+#feature-search-input {
   width: 100%;
-  padding: 7px 10px 7px 30px;
+  padding: 7px 10px 7px 34px !important;
   margin: 0;
   font-size: 0.82rem;
 }
@@ -382,27 +390,36 @@ button {
 .appbar-user {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
+  padding-left: 16px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-soft);
 }
 
 .appbar-user-info {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .appbar-username {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 150px;
+  line-height: 1.2;
 }
 
 .appbar-user-links {
   font-size: 0.7rem;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.2;
 }
 
 .avatar {
@@ -1137,6 +1154,11 @@ input[type="radio"]:checked::after {
   }
 }
 
+.discord-login-btn.nav-login-btn {
+  padding: 9px 18px;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 420px) {
   .page-head h1 {
     font-size: 1.3rem;
@@ -1147,9 +1169,14 @@ input[type="radio"]:checked::after {
   .landing-hero h1 {
     font-size: 1.55rem;
   }
-  .discord-login-btn {
+  .landing-hero .discord-login-btn {
     width: 100%;
     justify-content: center;
+  }
+  .discord-login-btn.nav-login-btn {
+    padding: 6px 12px;
+    font-size: 0.74rem;
+    gap: 5px;
   }
 }
 
@@ -1181,6 +1208,9 @@ input[type="radio"]:checked::after {
 
 .landing-nav .brand-mark {
   margin-right: 10px;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
 }
 
 .landing-brand {
@@ -1306,6 +1336,42 @@ input[type="radio"]:checked::after {
   font-size: 0.85rem;
   color: var(--text-muted);
   line-height: 1.55;
+}
+
+.landing-permissions {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 32px 80px;
+}
+
+.landing-permissions h2 {
+  font-size: 1.3rem;
+  margin: 0 0 10px;
+}
+
+.landing-permissions > p {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+
+.landing-permissions ul {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.landing-permissions li {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.landing-permissions strong {
+  color: var(--text);
 }
 
 .landing-footer {
@@ -1484,18 +1550,19 @@ input[type="radio"]:checked::after {
 
 .topbar-switch-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   color: var(--text-muted);
-  border-radius: var(--radius-sm);
-  padding: 4px 12px;
+  padding: 0;
   font-size: 0.72rem;
   cursor: pointer;
   font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .topbar-switch-btn:hover {
-  color: var(--text);
-  border-color: var(--text-muted);
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .topbar-user {
@@ -1514,11 +1581,12 @@ input[type="radio"]:checked::after {
   color: var(--text-faint);
   font-size: 0.72rem;
   text-decoration: none;
-  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .topbar-logout:hover {
   color: var(--red);
+  text-decoration: underline;
 }
 
 @media (max-width: 900px) {

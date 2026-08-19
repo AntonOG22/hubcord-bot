@@ -19,8 +19,8 @@
     <div class="gem-facet gem-facet-2"></div>
 
     <nav class="landing-nav">
-      <div class="landing-brand"><span class="brand-mark">💚</span>Emerald</div>
-      <a href="/auth/login" class="discord-login-btn" style="padding:9px 18px; font-size:0.85rem;">Login with Discord</a>
+      <div class="landing-brand"><img src="favicon.svg" class="brand-mark" alt="Emerald" />Emerald</div>
+      <a href="/auth/login" class="discord-login-btn nav-login-btn">Login with Discord</a>
     </nav>
 
     <div id="auth-error-banner" class="auth-error-banner hidden">
@@ -74,6 +74,18 @@
       </div>
     </div>
 
+    <div class="landing-permissions">
+      <h2>Why does Emerald ask for Administrator access?</h2>
+      <p>When you invite Emerald, Discord shows an Administrator permission request. That's a broad ask, so here's exactly why:</p>
+      <ul>
+        <li><strong>Tickets need their own channels and categories.</strong> Creating a ticket channel, moving it between categories on close/reopen, and setting who can see it requires channel-management permissions in every category — not just the ones picked ahead of time.</li>
+        <li><strong>Moderation has to work everywhere.</strong> Kicking, banning, timing out, purging messages, and applying slowmode only work reliably if the bot isn't blocked in some channel by a permission it wasn't explicitly given.</li>
+        <li><strong>Roles need to sit above the ones they manage.</strong> Giveaway roles, self-assign role panels, auto-role on join, and reaction roles all require the bot's own role to be positioned correctly and able to assign/remove roles server-wide.</li>
+        <li><strong>It's simpler and less fragile than picking permissions one by one.</strong> A narrower permission set would need updating every time you use a new feature or create a new channel — Administrator avoids random "missing permission" failures down the line.</li>
+      </ul>
+      <p>What Administrator access does <strong>not</strong> mean: it doesn't give Emerald — or anyone using the dashboard — access to any server you haven't explicitly logged into and been confirmed by Discord to manage. Every dashboard action is still re-verified live against your actual Discord permissions on every request (see the <a href="/terms.html">Terms</a> for the full breakdown). You can always review or remove the bot's role and its permissions directly in your own Discord server settings at any time.</p>
+    </div>
+
     <div class="landing-footer">
       <div class="landing-footer-links">
         <a href="/terms.html">Terms of Service</a>
@@ -115,7 +127,7 @@
 
     <header class="appbar">
       <div class="appbar-brand">
-        <span class="brand-mark">💚</span>
+        <img src="favicon.svg" class="brand-mark" alt="Emerald" />
         <div>
           <div class="brand-name">Emerald</div>
           <div class="brand-sub">Control Panel</div>
