@@ -56,6 +56,9 @@ const DICTS = {
 
     'counting.doubleUp': "❌ {user}, you can't count twice in a row! Back to **1**.",
     'counting.wrongNumber': '❌ {user} broke the count! Expected **{expected}**, but got **{got}**. Back to **1**.',
+
+    'command.unknownWithSuggestion': '❓ Unknown command `{prefix}{cmd}` — did you mean `{prefix}{suggestion}`?',
+    'command.unknownNoSuggestion': '❓ Unknown command `{prefix}{cmd}`. Try `{prefix}help` to see all commands.',
   },
 
   de: {
@@ -99,6 +102,9 @@ const DICTS = {
 
     'counting.doubleUp': '❌ {user}, du kannst nicht zweimal hintereinander zählen! Zurück auf **1**.',
     'counting.wrongNumber': '❌ {user} hat die Zählung unterbrochen! Erwartet war **{expected}**, aber es kam **{got}**. Zurück auf **1**.',
+
+    'command.unknownWithSuggestion': '❓ Unbekannter Befehl `{prefix}{cmd}` — meintest du `{prefix}{suggestion}`?',
+    'command.unknownNoSuggestion': '❓ Unbekannter Befehl `{prefix}{cmd}`. Probier `{prefix}help`, um alle Befehle zu sehen.',
   },
 
   fr: {
@@ -142,6 +148,9 @@ const DICTS = {
 
     'counting.doubleUp': "❌ {user}, tu ne peux pas compter deux fois de suite ! Retour à **1**.",
     'counting.wrongNumber': '❌ {user} a interrompu le compte ! **{expected}** était attendu, mais **{got}** a été reçu. Retour à **1**.',
+
+    'command.unknownWithSuggestion': '❓ Commande inconnue `{prefix}{cmd}` — vouliez-vous dire `{prefix}{suggestion}` ?',
+    'command.unknownNoSuggestion': '❓ Commande inconnue `{prefix}{cmd}`. Essayez `{prefix}help` pour voir toutes les commandes.',
   },
 };
 

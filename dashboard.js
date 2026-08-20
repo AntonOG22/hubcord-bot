@@ -488,6 +488,64 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     }
   });
 
+  // Picks where a broadcast lands on one server, with no per-guild input —
+  // this only runs for /api/admin/broadcast, which by design has no per-guild
+  // channel selection (that's the whole point of "send to every server at
+  // once"). Priority: a channel that looks like it's meant for announcements,
+  // then one that looks like the server's general chat, then whichever text
+  // channel has seen the most activity today, then just the first available
+  // text channel — always finds somewhere to land rather than skipping a
+  // server outright.
+  function pickBroadcastChannel(guild) {
+    const textChannels = [...guild.channels.cache.values()].filter(
+      (c) => c.type === ChannelType.GuildText && c.viewable && c.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.SendMessages)
+    );
+    if (textChannels.length === 0) return null;
+
+    const byName = (re) => textChannels.find((c) => re.test(c.name));
+    const announcements = byName(/announc|ank[uü]ndig|annonce/i);
+    if (announcements) return announcements;
+
+    const general = byName(/^general$|general-chat|allgemein|g[eé]n[eé]ral/i);
+    if (general) return general;
+
+    const counts = stats.getChannelCounts(guild.id); // [{channel: name, count}], most active first
+    for (const { channel: name } of counts) {
+      const match = textChannels.find((c) => c.name === name);
+      if (match) return match;
+    }
+
+    return textChannels[0];
+  }
+
+  app.post('/api/admin/broadcast', requireOwner, async (req, res) => {
+    const { title, message } = req.body || {};
+    if (!title || !message) return res.status(400).json({ error: 'title and message are required' });
+    if (String(title).length > 200) return res.status(400).json({ error: 'Title is too long (max 200 characters)' });
+    if (String(message).length > 4000) return res.status(400).json({ error: 'Message is too long (max 4000 characters)' });
+
+    const embed = buildOfficialAnnouncementEmbed(client, { title: String(title), message: String(message) });
+    const results = [];
+
+    for (const guild of client.guilds.cache.values()) {
+      const channel = pickBroadcastChannel(guild);
+      if (!channel) {
+        results.push({ guildId: guild.id, guildName: guild.name, ok: false, error: 'No usable text channel' });
+        continue;
+      }
+      try {
+        await channel.send({ embeds: [embed] });
+        audit(guild.id, 'Sent official Emerald broadcast', `#${channel.name}: ${title}`);
+        results.push({ guildId: guild.id, guildName: guild.name, ok: true, channelName: channel.name });
+      } catch (err) {
+        results.push({ guildId: guild.id, guildName: guild.name, ok: false, error: err.message || 'Failed to send' });
+      }
+    }
+
+    audit('_global', 'Sent official Emerald broadcast to all servers', `${results.filter((r) => r.ok).length}/${results.length} succeeded — ${title}`);
+    res.json({ results });
+  });
+
   app.get('/api/invite-url', requireAuth, (req, res) => {
     const guildId = req.query.guildId;
     const params = new URLSearchParams({

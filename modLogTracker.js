@@ -36,6 +36,9 @@ async function post(client, guildId, text) {
 function setupModLogTracking(client) {
   client.on('guildBanAdd', async (ban) => {
     const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
+    // AI automod already posts its own, more detailed embed for this —
+    // skip the plain-text duplicate underneath it.
+    if (entry?.reason?.startsWith('AI automod:')) return;
     const by = entry?.executor ? entry.executor.tag : 'unknown';
     const reason = entry?.reason || 'no reason given';
     post(client, ban.guild.id, `🔨 **${ban.user.tag}** was banned by **${by}** (${reason})`);
@@ -63,14 +66,18 @@ function setupModLogTracking(client) {
     const newTimeout = newMember.communicationDisabledUntilTimestamp;
     if (oldTimeout !== newTimeout) {
       const entry = await findAuditEntry(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
-      const by = entry?.executor ? entry.executor.tag : 'unknown';
-      const reason = entry?.reason || 'no reason given';
+      // Same as bans above — AI automod's own embed already covers this,
+      // skip only this block, not role-change detection further below.
+      if (!entry?.reason?.startsWith('AI automod:')) {
+        const by = entry?.executor ? entry.executor.tag : 'unknown';
+        const reason = entry?.reason || 'no reason given';
 
-      if (newTimeout && newTimeout > Date.now()) {
-        const until = Math.floor(newTimeout / 1000);
-        post(client, newMember.guild.id, `⏱️ **${newMember.user.tag}** was timed out by **${by}** until <t:${until}:f> (${reason})`);
-      } else if (oldTimeout && (!newTimeout || newTimeout <= Date.now())) {
-        post(client, newMember.guild.id, `▶️ Timeout removed for **${newMember.user.tag}** by **${by}**`);
+        if (newTimeout && newTimeout > Date.now()) {
+          const until = Math.floor(newTimeout / 1000);
+          post(client, newMember.guild.id, `⏱️ **${newMember.user.tag}** was timed out by **${by}** until <t:${until}:f> (${reason})`);
+        } else if (oldTimeout && (!newTimeout || newTimeout <= Date.now())) {
+          post(client, newMember.guild.id, `▶️ Timeout removed for **${newMember.user.tag}** by **${by}**`);
+        }
       }
     }
 

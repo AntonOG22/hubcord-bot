@@ -9,11 +9,58 @@ const rateCommands = require('./rateCommands');
 const customCommands = require('./customCommands');
 const { EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
+const { t } = require('./i18n');
 
 const commandMap = new Map();
 for (const c of commands) {
   commandMap.set(c.name, c);
   for (const alias of c.aliases) commandMap.set(alias, c);
+}
+
+// Standard edit-distance algorithm (insert/delete/substitute, each cost 1) —
+// used to guess what someone meant to type, e.g. "hel" -> "help" is distance 1.
+function levenshtein(a, b) {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const d = Array.from({ length: rows }, (_, i) => [i, ...Array(cols - 1).fill(0)]);
+  for (let j = 0; j < cols; j++) d[0][j] = j;
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    }
+  }
+  return d[rows - 1][cols - 1];
+}
+
+// Every command name/alias this specific server can currently actually run:
+// the ~100 built-in commands, its own custom "rate" commands, and its own
+// dashboard/AI-created custom commands — a typo suggestion pointing at a
+// command that doesn't even work here would be worse than no suggestion.
+function allKnownCommandNames(guildId) {
+  const names = [...commandMap.keys()];
+  for (const type of rateCommands.getTypes(guildId)) names.push(`rate${type.key}`);
+  for (const custom of customCommands.list(guildId)) names.push(custom.name);
+  return names;
+}
+
+// Only ever suggests something genuinely close — a wildly different guess
+// would be more confusing than just saying "try !help". The threshold scales
+// a little with word length so e.g. "kik" -> "kick" (distance 1) still
+// matches even though 1/3 of the typed word was "wrong".
+function closestCommandName(guildId, typed) {
+  const names = allKnownCommandNames(guildId);
+  let best = null;
+  let bestDistance = Infinity;
+  for (const name of names) {
+    const distance = levenshtein(typed, name);
+    if (distance < bestDistance) {
+      best = name;
+      bestDistance = distance;
+    }
+  }
+  const threshold = Math.max(2, Math.ceil(typed.length / 2));
+  return bestDistance <= threshold ? best : null;
 }
 
 function setupCommandHandler(client, ctx) {
@@ -43,7 +90,14 @@ function setupCommandHandler(client, ctx) {
 
       // Still not matched — check per-server custom commands (dashboard/AI-created).
       const custom = customCommands.find(message.guild.id, commandName);
-      if (!custom) return;
+      if (!custom) {
+        const suggestion = closestCommandName(message.guild.id, commandName);
+        const reply = suggestion
+          ? t(message.guild.id, 'command.unknownWithSuggestion', { prefix, cmd: commandName, suggestion })
+          : t(message.guild.id, 'command.unknownNoSuggestion', { prefix, cmd: commandName });
+        await message.reply(reply).catch(() => {});
+        return;
+      }
       try {
         if (custom.embedTitle || custom.imageUrl) {
           const embed = new EmbedBuilder()

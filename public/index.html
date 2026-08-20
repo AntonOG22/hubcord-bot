@@ -1205,6 +1205,21 @@
           </section>
 
           <section class="card wide">
+            <h2>Broadcast to Every Server</h2>
+            <p class="muted small">The same unmistakable official Emerald embed as above, sent to <strong>every server the bot is in at once</strong> — no server/channel picker, since it goes everywhere automatically. Each server gets it in whichever text channel looks like it's for announcements (matches "announcements"/"ankündigungen" etc. in the name); if there's none, the channel that looks like general chat; if there's neither, that server's most active text channel today.</p>
+
+            <label class="field-label" for="admin-broadcast-title">Title</label>
+            <input id="admin-broadcast-title" type="text" placeholder="e.g. New Feature: AI Automod" maxlength="200" />
+
+            <label class="field-label" for="admin-broadcast-message">Message</label>
+            <textarea id="admin-broadcast-message" rows="5" placeholder="Write the official announcement…" maxlength="4000"></textarea>
+
+            <button id="admin-broadcast-send" class="danger-button">📢 Broadcast to Every Server</button>
+            <p id="admin-broadcast-feedback" class="feedback-text"></p>
+            <div id="admin-broadcast-results" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
             <h2>Every Server</h2>
             <p class="muted small">Jump straight into any server's full dashboard — moderation, tickets, automod, everything — regardless of your own permissions there.</p>
             <div id="admin-guild-list" class="scroll-list tall"></div>

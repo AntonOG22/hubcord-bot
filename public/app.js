@@ -752,6 +752,49 @@ document.getElementById('admin-announce-send').addEventListener('click', async (
   }
 });
 
+document.getElementById('admin-broadcast-send').addEventListener('click', async () => {
+  const feedback = document.getElementById('admin-broadcast-feedback');
+  const resultsEl = document.getElementById('admin-broadcast-results');
+  const title = document.getElementById('admin-broadcast-title').value.trim();
+  const message = document.getElementById('admin-broadcast-message').value.trim();
+
+  if (!title || !message) {
+    setFeedback(feedback, 'Fill in both title and message.', false);
+    return;
+  }
+  if (!confirm('Send this official announcement to EVERY server the bot is in, right now? This can\'t be unsent automatically.')) return;
+
+  const btn = document.getElementById('admin-broadcast-send');
+  btn.disabled = true;
+  setFeedback(feedback, 'Sending…', true);
+  const res = await api('/api/admin/broadcast', { method: 'POST', body: JSON.stringify({ title, message }) });
+  btn.disabled = false;
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    setFeedback(feedback, err.error || 'Failed to send — try again.', false);
+    return;
+  }
+
+  const { results } = await res.json();
+  const okCount = results.filter((r) => r.ok).length;
+  setFeedback(feedback, `Sent to ${okCount}/${results.length} server(s).`, okCount === results.length);
+  document.getElementById('admin-broadcast-title').value = '';
+  document.getElementById('admin-broadcast-message').value = '';
+
+  resultsEl.innerHTML = results
+    .map(
+      (r) => `
+      <div class="list-row">
+        <div class="list-main">
+          <div class="list-title">${r.ok ? '✅' : '❌'} ${escapeHtml(r.guildName)}</div>
+          <div class="list-sub">${r.ok ? `Sent to #${escapeHtml(r.channelName)}` : escapeHtml(r.error || 'Failed')}</div>
+        </div>
+      </div>`
+    )
+    .join('');
+});
+
 // ---------- Init ----------
 
 let initialized = false;
