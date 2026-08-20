@@ -2640,6 +2640,7 @@ async function refreshJoinLeaveConfig() {
   document.getElementById('joinmsg-title').value = config.join.title || '';
   document.getElementById('joinmsg-description').value = config.join.description || '';
   document.getElementById('joinmsg-image').value = config.join.imageUrl || '';
+  document.getElementById('joinmsg-avatar-enabled').checked = config.join.avatarEnabled !== false;
   document.getElementById('joinmsg-color').value = config.join.color || '#3ecf8e';
 
   document.getElementById('leavemsg-enabled').checked = !!config.leave.enabled;
@@ -2647,6 +2648,7 @@ async function refreshJoinLeaveConfig() {
   document.getElementById('leavemsg-title').value = config.leave.title || '';
   document.getElementById('leavemsg-description').value = config.leave.description || '';
   document.getElementById('leavemsg-image').value = config.leave.imageUrl || '';
+  document.getElementById('leavemsg-avatar-enabled').checked = config.leave.avatarEnabled !== false;
   document.getElementById('leavemsg-color').value = config.leave.color || '#f0655f';
 }
 
@@ -2659,6 +2661,7 @@ async function saveJoinLeaveConfig() {
       title: document.getElementById('joinmsg-title').value,
       description: document.getElementById('joinmsg-description').value,
       imageUrl: document.getElementById('joinmsg-image').value,
+      avatarEnabled: document.getElementById('joinmsg-avatar-enabled').checked,
       color: document.getElementById('joinmsg-color').value,
     },
     leave: {
@@ -2667,6 +2670,7 @@ async function saveJoinLeaveConfig() {
       title: document.getElementById('leavemsg-title').value,
       description: document.getElementById('leavemsg-description').value,
       imageUrl: document.getElementById('leavemsg-image').value,
+      avatarEnabled: document.getElementById('leavemsg-avatar-enabled').checked,
       color: document.getElementById('leavemsg-color').value,
     },
   };
