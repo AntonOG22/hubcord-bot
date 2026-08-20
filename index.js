@@ -21,6 +21,7 @@ const { setupTickets } = require('./tickets');
 const { setupRolePanels } = require('./rolePanels');
 const { setupJoinLeaveMessages } = require('./joinLeaveMessages');
 const { setupStreamAlerts } = require('./streamAlerts');
+const { setupAiAutomod } = require('./aiAutomod');
 const { preloadAll } = require('./guildStore');
 
 patchConsole();
@@ -68,6 +69,7 @@ client.once('ready', async () => {
   setupRolePanels(client);
   setupJoinLeaveMessages(client);
   setupStreamAlerts(client);
+  setupAiAutomod(client);
   verificationGate.setupVerificationGate(client);
 
   setupCommandHandler(client, { client });

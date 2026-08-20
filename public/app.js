@@ -783,6 +783,10 @@ function init() {
   populateChannelSelect(document.getElementById('fun-channel'));
   populateChannelSelect(document.getElementById('rr-channel'));
   populateChannelSelect(document.getElementById('verification-channel'));
+  Promise.all([
+    populateRoleSelect(document.getElementById('automod-ignore-roles')),
+    populateChannelSelect(document.getElementById('automod-ignore-channels')),
+  ]).then(refreshAutomod);
   populateRoleSelect(document.getElementById('rr-role'));
   Promise.all([
     populateChannelSelect(document.getElementById('settings-counting-channel'), { withNone: true }),
@@ -886,6 +890,7 @@ function refreshEverything() {
   refreshReminders();
   refreshStreamAlerts();
   refreshAutomod();
+  refreshAiAutomod();
   refreshVerification();
   refreshReactionRoles();
   refreshInsights();
@@ -1800,7 +1805,23 @@ const AUTOMOD_LABELS = {
   capsFilter: 'Block excessive CAPS spam',
   mentionSpamFilter: 'Block mass mentions (5+)',
   duplicateSpamFilter: 'Block repeated duplicate messages',
+  wordFilterEnabled: 'Block banned words (list below)',
+  linkBlacklistEnabled: 'Block blacklisted link domains (list below)',
+  scamDomainFilter: 'Block known scam/phishing link patterns (starter list, built in)',
+  zalgoFilter: 'Block zalgo / excessive unicode spam',
+  wallOfTextFilter: 'Block wall-of-text messages (limits below)',
+  emojiSpamFilter: 'Block excessive emoji spam (limit below)',
+  attachmentBlocklistEnabled: 'Block disallowed file attachments (list below)',
 };
+
+function setMultiSelectValues(selectEl, values) {
+  const set = new Set(values || []);
+  [...selectEl.options].forEach((opt) => { opt.selected = set.has(opt.value); });
+}
+
+function getMultiSelectValues(selectEl) {
+  return [...selectEl.selectedOptions].map((opt) => opt.value);
+}
 
 async function refreshAutomod() {
   const res = await api('/api/automod');
@@ -1812,7 +1833,7 @@ async function refreshAutomod() {
     .map(
       ([key, label]) => `
       <div class="toggle-row">
-        <span class="toggle-label">${label}</span>
+        <span class="toggle-label">${escapeHtml(label)}</span>
         <label class="toggle-switch">
           <input type="checkbox" data-automod-key="${key}" ${config[key] ? 'checked' : ''} />
           <span class="toggle-slider"></span>
@@ -1823,6 +1844,24 @@ async function refreshAutomod() {
     .join('');
 
   document.getElementById('automod-age-gate').value = config.accountAgeGateDays || 0;
+  document.getElementById('automod-banned-words').value = (config.bannedWords || []).join('\n');
+  document.getElementById('automod-link-blacklist').value = (config.linkBlacklist || []).join('\n');
+  document.getElementById('automod-attachment-blocklist').value = (config.attachmentBlocklist || []).join(', ');
+  document.getElementById('automod-wall-lines').value = config.wallOfTextMaxLines || 15;
+  document.getElementById('automod-wall-chars').value = config.wallOfTextMaxChars || 2000;
+  document.getElementById('automod-emoji-max').value = config.emojiSpamMax || 10;
+  document.getElementById('automod-punishment').value = config.defaultPunishment || 'delete';
+  document.getElementById('automod-timeout-minutes').value = config.timeoutMinutes || 10;
+  document.getElementById('automod-escalation-toggle').checked = !!config.escalationEnabled;
+  document.getElementById('automod-escalation-reset').value = config.escalationResetHours || 24;
+  document.getElementById('automod-raid-slowmode-toggle').checked = !!config.raidSlowmodeEnabled;
+  document.getElementById('automod-raid-threshold').value = config.raidSlowmodeThreshold || 5;
+  document.getElementById('automod-raid-window').value = config.raidSlowmodeWindowSeconds || 30;
+  document.getElementById('automod-raid-slowmode-seconds').value = config.raidSlowmodeSeconds || 10;
+  document.getElementById('automod-raid-duration').value = config.raidSlowmodeDurationMinutes || 5;
+
+  setMultiSelectValues(document.getElementById('automod-ignore-roles'), config.ignoreRoleIds);
+  setMultiSelectValues(document.getElementById('automod-ignore-channels'), config.ignoreChannelIds);
 }
 
 async function saveAutomod() {
@@ -1832,15 +1871,73 @@ async function saveAutomod() {
     patch[input.dataset.automodKey] = input.checked;
   });
   patch.accountAgeGateDays = parseInt(document.getElementById('automod-age-gate').value, 10) || 0;
+  patch.bannedWords = document.getElementById('automod-banned-words').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  patch.linkBlacklist = document.getElementById('automod-link-blacklist').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  patch.attachmentBlocklist = document.getElementById('automod-attachment-blocklist').value.split(',').map((s) => s.trim().replace(/^\./, '').toLowerCase()).filter(Boolean);
+  patch.wallOfTextMaxLines = parseInt(document.getElementById('automod-wall-lines').value, 10) || 15;
+  patch.wallOfTextMaxChars = parseInt(document.getElementById('automod-wall-chars').value, 10) || 2000;
+  patch.emojiSpamMax = parseInt(document.getElementById('automod-emoji-max').value, 10) || 10;
+  patch.defaultPunishment = document.getElementById('automod-punishment').value;
+  patch.timeoutMinutes = parseInt(document.getElementById('automod-timeout-minutes').value, 10) || 10;
+  patch.escalationEnabled = document.getElementById('automod-escalation-toggle').checked;
+  patch.escalationResetHours = parseInt(document.getElementById('automod-escalation-reset').value, 10) || 24;
+  patch.raidSlowmodeEnabled = document.getElementById('automod-raid-slowmode-toggle').checked;
+  patch.raidSlowmodeThreshold = parseInt(document.getElementById('automod-raid-threshold').value, 10) || 5;
+  patch.raidSlowmodeWindowSeconds = parseInt(document.getElementById('automod-raid-window').value, 10) || 30;
+  patch.raidSlowmodeSeconds = parseInt(document.getElementById('automod-raid-slowmode-seconds').value, 10) || 10;
+  patch.raidSlowmodeDurationMinutes = parseInt(document.getElementById('automod-raid-duration').value, 10) || 5;
+  patch.ignoreRoleIds = getMultiSelectValues(document.getElementById('automod-ignore-roles'));
+  patch.ignoreChannelIds = getMultiSelectValues(document.getElementById('automod-ignore-channels'));
 
   const res = await api('/api/automod', { method: 'POST', body: JSON.stringify(patch) });
   if (res.ok) {
     setFeedback(feedback, 'Saved!', true);
     refreshAuditLog();
   } else {
-    setFeedback(feedback, 'Failed to save.', false);
+    const data = await res.json().catch(() => ({}));
+    setFeedback(feedback, data.error || 'Failed to save.', false);
   }
 }
+
+// ---------- Security: AI automod ----------
+
+async function refreshAiAutomod() {
+  const res = await api('/api/ai-automod');
+  if (!res.ok) return;
+  const config = await res.json();
+
+  const note = document.getElementById('ai-automod-unconfigured-note');
+  const enabledToggle = document.getElementById('ai-automod-enabled');
+  if (!config.configured) {
+    note.textContent = "AI automod isn't configured on this bot yet (missing API key) — ask the bot owner to set it up. Every other automod filter above still works normally.";
+    note.classList.remove('hidden');
+    enabledToggle.disabled = true;
+  } else {
+    note.classList.add('hidden');
+    enabledToggle.disabled = false;
+  }
+
+  enabledToggle.checked = !!config.enabled;
+  document.getElementById('ai-automod-strictness').value = config.strictness || 'moderate';
+  document.getElementById('ai-automod-prompt').value = config.systemPrompt || '';
+}
+
+document.getElementById('ai-automod-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('ai-automod-feedback');
+  const patch = {
+    enabled: document.getElementById('ai-automod-enabled').checked,
+    strictness: document.getElementById('ai-automod-strictness').value,
+    systemPrompt: document.getElementById('ai-automod-prompt').value.trim(),
+  };
+  const res = await api('/api/ai-automod', { method: 'POST', body: JSON.stringify(patch) });
+  if (res.ok) {
+    setFeedback(feedback, 'Saved!', true);
+    refreshAuditLog();
+  } else {
+    const data = await res.json().catch(() => ({}));
+    setFeedback(feedback, data.error || 'Failed to save.', false);
+  }
+});
 
 async function setLockdown(locked) {
   const feedback = document.getElementById('lockdown-feedback');
@@ -2783,6 +2880,7 @@ const FEATURE_INDEX = [
   { label: 'Create a Poll', tab: 'messaging' },
 
   { label: 'Auto-Moderation', tab: 'security' },
+  { label: 'AI Automod', tab: 'security' },
   { label: 'Server Lockdown', tab: 'security' },
   { label: 'Verification Gate', tab: 'security' },
 

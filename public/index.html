@@ -394,12 +394,117 @@
 
           <section class="card wide">
             <h2>Auto-Moderation</h2>
-            <p class="muted small">Staff (Manage Messages) are always exempt.</p>
+            <p class="muted small">Staff (Manage Messages) are always exempt, along with anyone in the ignore list below.</p>
             <div id="automod-toggles" class="toggle-list"></div>
+
             <label class="field-label" for="automod-age-gate">New-account age gate (days, 0 = off)</label>
             <input id="automod-age-gate" type="number" min="0" value="0" />
+
+            <label class="field-label" for="automod-banned-words">Banned words <span class="muted small">(one per line — catches common leetspeak/spacing bypasses like "f u c k" or "f4ck" automatically)</span></label>
+            <textarea id="automod-banned-words" rows="3" placeholder="one word or phrase per line…"></textarea>
+
+            <label class="field-label" for="automod-link-blacklist">Blacklisted link domains <span class="muted small">(one per line — blocked even if the general link filter above is off)</span></label>
+            <textarea id="automod-link-blacklist" rows="2" placeholder="example-scam-site.com"></textarea>
+
+            <label class="field-label" for="automod-attachment-blocklist">Blocked file extensions <span class="muted small">(comma-separated, no dots)</span></label>
+            <input id="automod-attachment-blocklist" type="text" placeholder="exe, bat, scr" />
+
+            <div class="row">
+              <div>
+                <label class="field-label" for="automod-wall-lines">Wall-of-text: max lines</label>
+                <input id="automod-wall-lines" type="number" min="1" value="15" />
+              </div>
+              <div>
+                <label class="field-label" for="automod-wall-chars">Wall-of-text: max characters</label>
+                <input id="automod-wall-chars" type="number" min="1" value="2000" />
+              </div>
+              <div>
+                <label class="field-label" for="automod-emoji-max">Max emoji per message</label>
+                <input id="automod-emoji-max" type="number" min="1" value="10" />
+              </div>
+            </div>
+
+            <label class="field-label" for="automod-punishment">Default punishment <span class="muted small">(for any filter above, unless escalation is on)</span></label>
+            <select id="automod-punishment">
+              <option value="delete">Delete only</option>
+              <option value="warn">Delete + Warn</option>
+              <option value="timeout">Delete + Timeout</option>
+              <option value="kick">Delete + Kick</option>
+              <option value="ban">Delete + Ban</option>
+            </select>
+            <label class="field-label" for="automod-timeout-minutes">Timeout duration (minutes, used when punishment is Timeout)</label>
+            <input id="automod-timeout-minutes" type="number" min="1" value="10" />
+
+            <div class="toggle-row" style="margin-top:16px">
+              <span class="toggle-label">Escalating punishments <span class="muted small">(1st offense = delete, 2nd = warn, 3rd = timeout, 4th = kick, 5th+ = ban — overrides the default punishment above)</span></span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="automod-escalation-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label class="field-label" for="automod-escalation-reset">Reset a member's violation count after this many hours of good behavior</label>
+            <input id="automod-escalation-reset" type="number" min="1" value="24" />
+
+            <div class="toggle-row" style="margin-top:16px">
+              <span class="toggle-label">Raid slowmode <span class="muted small">(auto-slowmode a channel getting hit with a burst of violations)</span></span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="automod-raid-slowmode-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div>
+                <label class="field-label" for="automod-raid-threshold">Violations to trigger</label>
+                <input id="automod-raid-threshold" type="number" min="1" value="5" />
+              </div>
+              <div>
+                <label class="field-label" for="automod-raid-window">...within seconds</label>
+                <input id="automod-raid-window" type="number" min="1" value="30" />
+              </div>
+              <div>
+                <label class="field-label" for="automod-raid-slowmode-seconds">Slowmode applied (sec)</label>
+                <input id="automod-raid-slowmode-seconds" type="number" min="1" value="10" />
+              </div>
+              <div>
+                <label class="field-label" for="automod-raid-duration">Lifted after (min)</label>
+                <input id="automod-raid-duration" type="number" min="1" value="5" />
+              </div>
+            </div>
+
+            <label class="field-label" for="automod-ignore-roles">Ignore list — roles <span class="muted small">(exempt from every filter above, ctrl/cmd-click to select multiple)</span></label>
+            <select id="automod-ignore-roles" multiple size="4"></select>
+            <label class="field-label" for="automod-ignore-channels">Ignore list — channels</label>
+            <select id="automod-ignore-channels" multiple size="4"></select>
+
             <button id="automod-save-btn" class="primary-button">Save Settings</button>
             <p id="automod-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>AI Automod <span class="muted small">(Mistral-powered)</span></h2>
+            <p class="muted small">Reads each message against your own custom rules below and can act on its own — delete, warn, timeout, and (only in Strict mode) kick or ban. Runs alongside the filters above, shares the same ignore list, and is rate-limited per server so it can never run up an unexpected bill.</p>
+            <p id="ai-automod-unconfigured-note" class="feedback-text small hidden"></p>
+
+            <div class="toggle-row">
+              <span class="toggle-label">Enabled</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="ai-automod-enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <label class="field-label" for="ai-automod-strictness">Strictness</label>
+            <select id="ai-automod-strictness">
+              <option value="lenient">Lenient — only obvious violations, max action: Warn</option>
+              <option value="moderate">Moderate — reasonable enforcement, max action: Timeout</option>
+              <option value="strict">Strict — proactive enforcement, max action: Ban</option>
+            </select>
+
+            <label class="field-label" for="ai-automod-prompt">Custom rules for this server <span class="muted small">(plain English — appended to the base moderation instructions)</span></label>
+            <textarea id="ai-automod-prompt" rows="5" placeholder="e.g. This is a Minecraft server for teenagers. Be extra strict about spoilers for the current build competition. Light swearing between friends is fine, but slurs are never okay."></textarea>
+
+            <button id="ai-automod-save-btn" class="primary-button">Save AI Automod Settings</button>
+            <p id="ai-automod-feedback" class="feedback-text"></p>
           </section>
 
           <section class="card">

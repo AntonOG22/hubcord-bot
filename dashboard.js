@@ -42,6 +42,7 @@ const features = require('./features');
 const joinLeaveMessages = require('./joinLeaveMessages');
 const imageUpload = require('./imageUpload');
 const streamAlerts = require('./streamAlerts');
+const aiAutomod = require('./aiAutomod');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -1016,10 +1017,63 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     res.json(automod.getConfig(req.guildId));
   });
 
+  const PUNISHMENTS = ['delete', 'warn', 'timeout', 'kick', 'ban'];
+  const MAX_LIST_ITEMS = 100; // bannedWords / linkBlacklist / attachmentBlocklist — generous but bounded
+
   app.post('/api/automod', requireGuildAccess, (req, res) => {
-    const config = automod.updateConfig(req.guildId, req.body || {});
-    audit(req.guildId, 'Updated auto-mod settings', Object.keys(req.body || {}).join(', '));
+    const patch = req.body || {};
+
+    if (patch.defaultPunishment !== undefined && !PUNISHMENTS.includes(patch.defaultPunishment)) {
+      return res.status(400).json({ error: `defaultPunishment must be one of: ${PUNISHMENTS.join(', ')}` });
+    }
+    for (const key of ['bannedWords', 'linkBlacklist', 'attachmentBlocklist']) {
+      if (patch[key] !== undefined && (!Array.isArray(patch[key]) || patch[key].length > MAX_LIST_ITEMS)) {
+        return res.status(400).json({ error: `${key} must be a list of at most ${MAX_LIST_ITEMS} items` });
+      }
+    }
+    for (const key of ['ignoreRoleIds']) {
+      if (patch[key] !== undefined) {
+        if (!Array.isArray(patch[key]) || patch[key].some((id) => !req.guild.roles.cache.has(id))) {
+          return res.status(400).json({ error: 'ignoreRoleIds must only contain roles in this server' });
+        }
+      }
+    }
+    if (patch.ignoreChannelIds !== undefined) {
+      if (!Array.isArray(patch.ignoreChannelIds) || patch.ignoreChannelIds.some((id) => !req.guild.channels.cache.has(id))) {
+        return res.status(400).json({ error: 'ignoreChannelIds must only contain channels in this server' });
+      }
+    }
+
+    const config = automod.updateConfig(req.guildId, patch);
+    audit(req.guildId, 'Updated auto-mod settings', Object.keys(patch).join(', '));
     res.json(config);
+  });
+
+  // ---------- AI Automod (Mistral-powered) ----------
+  // The API key never leaves this server — the dashboard only ever sees
+  // `configured: true/false` (whether MISTRAL_AUTOMOD_API_KEY is set on this
+  // deployment), never the key itself.
+  const AI_AUTOMOD_STRICTNESS = ['lenient', 'moderate', 'strict'];
+  const AI_AUTOMOD_PROMPT_MAX = 2000;
+
+  app.get('/api/ai-automod', requireGuildAccess, (req, res) => {
+    res.json({ ...aiAutomod.getConfig(req.guildId), configured: aiAutomod.isConfigured() });
+  });
+
+  app.post('/api/ai-automod', requireGuildAccess, (req, res) => {
+    const patch = req.body || {};
+    if (patch.strictness !== undefined && !AI_AUTOMOD_STRICTNESS.includes(patch.strictness)) {
+      return res.status(400).json({ error: `strictness must be one of: ${AI_AUTOMOD_STRICTNESS.join(', ')}` });
+    }
+    if (patch.systemPrompt !== undefined && String(patch.systemPrompt).length > AI_AUTOMOD_PROMPT_MAX) {
+      return res.status(400).json({ error: `System prompt is too long (max ${AI_AUTOMOD_PROMPT_MAX} characters)` });
+    }
+    if (patch.enabled && !aiAutomod.isConfigured()) {
+      return res.status(400).json({ error: 'AI automod is not configured on this bot yet (missing API key) — ask the bot owner to set it up.' });
+    }
+    const config = aiAutomod.updateConfig(req.guildId, patch);
+    audit(req.guildId, 'Updated AI automod settings', Object.keys(patch).join(', '));
+    res.json({ ...config, configured: aiAutomod.isConfigured() });
   });
 
   // ---------- Anti-raid / lockdown ----------

@@ -22,6 +22,7 @@ const FEATURES = [
   { key: 'autoResponses', label: 'Auto-Responses', description: 'Automatic replies when a message contains a trigger word.' },
   { key: 'reactionRoles', label: 'Reaction Roles', description: 'Reacting to a message to get/remove a role.' },
   { key: 'streamAlerts', label: 'Stream Alerts', description: 'Twitch go-live and YouTube new-video notifications.' },
+  { key: 'aiAutomod', label: 'AI Automod', description: 'Mistral-powered moderation that reads messages against your custom rules and can act on its own.' },
 ];
 
 function isEnabled(guildId, key) {
