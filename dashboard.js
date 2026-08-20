@@ -45,6 +45,7 @@ const streamAlerts = require('./streamAlerts');
 const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
 const { fillPlaceholders } = require('./placeholders');
+const helmet = require('helmet');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -105,6 +106,54 @@ const guildListCache = new Map(); // userId -> { guilds, fetchedAt }
 function startDashboard(client, { port, clientId, clientSecret, sessionSecret, publicUrl }) {
   const app = express();
   app.set('trust proxy', 1); // Render sits behind a proxy; needed for secure cookies
+  app.disable('x-powered-by'); // don't hand an attacker a free "this is Express" fingerprint
+
+  // Standard security headers (the set an audit like Mozilla Observatory
+  // checks for): CSP, HSTS, frame-ancestors (replaces X-Frame-Options),
+  // nosniff, a strict referrer policy, and same-origin resource policy.
+  // Scoped tightly to what this dashboard actually loads — there are no
+  // inline <script> tags anywhere (only the external app.js), so script-src
+  // stays fully locked down with no 'unsafe-inline'/'unsafe-eval'. The
+  // markup does have plain style="" attributes scattered around (small
+  // margin tweaks), which need 'unsafe-inline' on style-src specifically —
+  // CSS alone can't execute JS, a much lower bar than allowing it for
+  // scripts, so this is a deliberate, narrow exception, not a blanket one.
+  const supabaseOrigin = (() => {
+    try {
+      return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : null;
+    } catch {
+      return null;
+    }
+  })();
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          imgSrc: ["'self'", 'data:', 'https://cdn.discordapp.com', 'https://media.discordapp.net', ...(supabaseOrigin ? [supabaseOrigin] : [])],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          objectSrc: ["'none'"],
+          upgradeInsecureRequests: [],
+        },
+      },
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      // Deliberately more conservative than helmet's 2-year default while
+      // this is still fresh — easy to raise later, hard to walk back once
+      // browsers have cached a long max-age. Not submitting to the HSTS
+      // preload list: this runs on a shared onrender.com hostname, not a
+      // domain we independently control end-to-end.
+      hsts: { maxAge: 15552000, includeSubDomains: true, preload: false },
+    })
+  );
+
   app.use(express.json());
   app.use(
     cookieSession({
