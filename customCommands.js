@@ -12,6 +12,7 @@
 // delete is the closest equivalent here), a per-user cooldown, and a few
 // placeholder variables ({user}, {username}, {server}, {membercount}).
 const { makeGuildStore } = require('./guildStore');
+const { fillPlaceholders: sharedFillPlaceholders } = require('./placeholders');
 
 const store = makeGuildStore('custom-commands.json', () => []);
 
@@ -109,12 +110,11 @@ function recordUse(guildId, userId, command) {
   store.save();
 }
 
-function fillPlaceholders(text, member) {
-  return (text || '')
-    .replaceAll('{user}', `${member}`)
-    .replaceAll('{username}', member.user?.tag || member.user?.username || 'Unknown')
-    .replaceAll('{server}', member.guild.name)
-    .replaceAll('{membercount}', String(member.guild.memberCount));
+// Thin wrapper keeping this module's existing (text, member, channel) call
+// shape — see placeholders.js for the full, shared set of variables and how
+// each one is filled in.
+function fillPlaceholders(text, member, channel) {
+  return sharedFillPlaceholders(text, { member, channel });
 }
 
 module.exports = { list, find, add, remove, sanitizeName, canUse, checkCooldown, recordUse, fillPlaceholders };

@@ -266,6 +266,105 @@ document.querySelectorAll('input[type="text"], textarea').forEach((el) => {
   wireMentionAutocomplete(el);
 });
 
+// ---------- { placeholder autocomplete ----------
+//
+// Same idea as the @mention autocomplete above, triggered by { instead —
+// only wired to the fields that actually support placeholders.js's shared
+// variable set (see the Guides tab), so it doesn't pop up somewhere a { is
+// just a literal character with no special meaning.
+const PLACEHOLDER_LIST = [
+  { token: '{user}', desc: 'mention of the member' },
+  { token: '{username}', desc: 'their plain Discord tag' },
+  { token: '{userid}', desc: 'their raw user ID' },
+  { token: '{useravatar}', desc: 'link to their avatar image' },
+  { token: '{server}', desc: "this server's name" },
+  { token: '{serverid}', desc: "this server's raw ID" },
+  { token: '{servericon}', desc: "link to this server's icon" },
+  { token: '{membercount}', desc: 'total member count' },
+  { token: '{boostcount}', desc: 'Nitro boost count' },
+  { token: '{rolecount}', desc: 'number of roles' },
+  { token: '{channelname}', desc: 'the channel name' },
+  { token: '{channelmention}', desc: 'a clickable channel mention' },
+  { token: '{date}', desc: "today's date" },
+  { token: '{time}', desc: 'the current time' },
+];
+const PLACEHOLDER_FIELDS = new Set(['customcmd-response', 'customcmd-embed-title', 'autoresponse-reply', 'message-input', 'title-input']);
+
+function wirePlaceholderAutocomplete(input) {
+  let dropdown = null;
+  let braceIndex = -1;
+
+  function closeDropdown() {
+    if (dropdown) {
+      dropdown.remove();
+      dropdown = null;
+    }
+  }
+
+  function positionDropdown() {
+    if (!dropdown) return;
+    const rect = input.getBoundingClientRect();
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.width = `${Math.max(rect.width, 260)}px`;
+  }
+
+  function selectResult(token) {
+    const value = input.value;
+    const caret = input.selectionStart;
+    const newValue = value.slice(0, braceIndex) + token + value.slice(caret);
+    input.value = newValue;
+    const newCaret = braceIndex + token.length;
+    input.focus();
+    input.setSelectionRange(newCaret, newCaret);
+    closeDropdown();
+  }
+
+  function renderResults(matches) {
+    closeDropdown();
+    dropdown = document.createElement('div');
+    dropdown.className = 'mention-dropdown';
+    dropdown.innerHTML = matches.length
+      ? matches
+          .map((p) => `<div class="mention-result" data-token="${escapeHtml(p.token)}"><span class="mention-label"><code>${escapeHtml(p.token)}</code> — ${escapeHtml(p.desc)}</span></div>`)
+          .join('')
+      : '<div class="mention-empty">No matching placeholder</div>';
+
+    document.body.appendChild(dropdown);
+    positionDropdown();
+
+    dropdown.querySelectorAll('[data-token]').forEach((row) => {
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectResult(row.dataset.token);
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    const value = input.value;
+    const caret = input.selectionStart;
+    const textBeforeCaret = value.slice(0, caret);
+    const foundBrace = textBeforeCaret.lastIndexOf('{');
+    if (foundBrace === -1 || /[\s{}]/.test(textBeforeCaret.slice(foundBrace + 1))) {
+      closeDropdown();
+      return;
+    }
+    braceIndex = foundBrace;
+    const query = textBeforeCaret.slice(foundBrace + 1).toLowerCase();
+    const matches = PLACEHOLDER_LIST.filter((p) => p.token.slice(1).toLowerCase().startsWith(query));
+    renderResults(matches);
+  });
+
+  input.addEventListener('blur', () => setTimeout(closeDropdown, 150));
+  window.addEventListener('scroll', () => dropdown && positionDropdown(), true);
+}
+
+PLACEHOLDER_FIELDS.forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) wirePlaceholderAutocomplete(el);
+});
+
 async function boot() {
   try {
     const res = await api('/api/me');

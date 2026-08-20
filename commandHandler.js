@@ -109,8 +109,8 @@ function setupCommandHandler(client, ctx) {
         return;
       }
 
-      const responseText = customCommands.fillPlaceholders(custom.response, message.member);
-      const titleText = custom.embedTitle ? customCommands.fillPlaceholders(custom.embedTitle, message.member) : null;
+      const responseText = customCommands.fillPlaceholders(custom.response, message.member, message.channel);
+      const titleText = custom.embedTitle ? customCommands.fillPlaceholders(custom.embedTitle, message.member, message.channel) : null;
 
       let payload;
       if (custom.useEmbed) {

@@ -2,6 +2,7 @@
 // would fire the bot's reply on every other server it's in too.
 const { makeGuildStore } = require('./guildStore');
 const features = require('./features');
+const { fillPlaceholders } = require('./placeholders');
 
 const store = makeGuildStore('autoresponses-state.json', () => []); // guildId -> [{id, trigger, reply}]
 
@@ -16,7 +17,7 @@ function setupAutoResponses(client) {
     if (!match) return;
 
     try {
-      await message.reply(match.reply);
+      await message.reply(fillPlaceholders(match.reply, { member: message.member, channel: message.channel }));
     } catch (err) {
       console.error('Auto-response send failed:', err.message);
     }

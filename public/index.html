@@ -312,7 +312,7 @@
 
           <section class="card wide">
             <h2>Send a Message</h2>
-            <p class="muted small">Post as the bot into any text channel on the server.</p>
+            <p class="muted small">Post as the bot into any text channel on the server. Supports server/channel/date/time placeholders like <code>{server}</code> and <code>{membercount}</code> — see the Guides tab for the full list (member-specific ones like <code>{user}</code> don't apply here since no one member triggers this).</p>
 
             <label class="field-label" for="channel-select">Channel</label>
             <select id="channel-select"></select>
@@ -562,7 +562,7 @@
 
           <section class="card wide">
             <h2>Custom Commands</h2>
-            <p class="muted small">Make your own command that replies with fixed text — e.g. <code>!rules</code>. Different from auto-responses: this only fires on an exact command, not a word anywhere in a message. Response and embed title support <code>{user}</code>, <code>{username}</code>, <code>{server}</code>, <code>{membercount}</code>.</p>
+            <p class="muted small">Make your own command that replies with fixed text — e.g. <code>!rules</code>. Different from auto-responses: this only fires on an exact command, not a word anywhere in a message. Response and embed title support placeholders like <code>{user}</code> and <code>{server}</code> — see the Guides tab for the full list.</p>
             <div class="row">
               <input id="customcmd-name" type="text" placeholder="Command name (no prefix), e.g. rules" />
             </div>
@@ -857,7 +857,7 @@
 
           <section class="card wide">
             <h2>Auto-Responses</h2>
-            <p class="muted small">Bot replies automatically when a message contains the trigger word.</p>
+            <p class="muted small">Bot replies automatically when a message contains the trigger word. The reply supports placeholders like <code>{user}</code> and <code>{server}</code> — see the Guides tab for the full list.</p>
             <div class="row">
               <input id="autoresponse-trigger" type="text" placeholder="Trigger word…" />
               <input id="autoresponse-reply" type="text" placeholder="Bot's reply…" />
@@ -1113,6 +1113,69 @@
               </div>
             </div>
             <p class="muted small guide-tip">Tip: combine both in the channel name format, e.g. <code>{count}-{username}</code> → <code>42-anton</code>, so channels sort by ticket number but still show who opened them.</p>
+          </section>
+
+          <section class="card wide">
+            <h2>Custom Commands, Auto-Responses &amp; Send a Message</h2>
+            <p class="muted small">The same shared set of placeholders works in all three: Commands tab → Custom Commands (response + embed title), Automation tab → Auto-Responses (reply), and Messaging tab → Send a Message (message + embed title — member-specific ones below don't apply there, since no one member triggers it).</p>
+            <div class="guide-var-list">
+              <div class="guide-var-row">
+                <code>{user}</code>
+                <span>A mention of the member who triggered it (<code>@username</code>).</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{username}</code>
+                <span>Their plain Discord tag as text, no clickable mention.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{userid}</code>
+                <span>Their raw Discord user ID.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{useravatar}</code>
+                <span>A direct link to their avatar image.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{server}</code>
+                <span>This server's name.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{serverid}</code>
+                <span>This server's raw Discord ID.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{servericon}</code>
+                <span>A direct link to this server's icon image.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{membercount}</code>
+                <span>The server's current total member count.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{boostcount}</code>
+                <span>How many Nitro boosts this server currently has.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{rolecount}</code>
+                <span>How many roles this server has.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{channelname}</code>
+                <span>The name of the channel it was used/triggered in.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{channelmention}</code>
+                <span>A clickable mention of that channel (<code>#channel-name</code>).</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{date}</code>
+                <span>Today's date, e.g. "August 20, 2026".</span>
+              </div>
+              <div class="guide-var-row">
+                <code>{time}</code>
+                <span>The current time, e.g. "14:32".</span>
+              </div>
+            </div>
           </section>
 
           <section class="card wide">

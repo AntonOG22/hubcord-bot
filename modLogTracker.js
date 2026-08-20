@@ -5,6 +5,7 @@
 const { AuditLogEvent } = require('discord.js');
 const guildConfig = require('./guildConfig');
 const features = require('./features');
+const botActionRegistry = require('./botActionRegistry');
 
 // Finds the most recent matching audit log entry for a target, so we know who did it.
 async function findAuditEntry(guild, type, targetId) {
@@ -35,10 +36,13 @@ async function post(client, guildId, text) {
 
 function setupModLogTracking(client) {
   client.on('guildBanAdd', async (ban) => {
-    const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
     // AI automod already posts its own, more detailed embed for this —
-    // skip the plain-text duplicate underneath it.
-    if (entry?.reason?.startsWith('AI automod:')) return;
+    // skip the plain-text duplicate underneath it. Checked via a server-side
+    // marker (botActionRegistry), not the ban's reason text — matching on
+    // reason text would let any admin with Ban Members hide their OWN manual
+    // ban from this log just by typing a matching reason string.
+    if (botActionRegistry.wasJustAutomated(ban.guild.id, ban.user.id, 'ban')) return;
+    const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
     const reason = entry?.reason || 'no reason given';
     post(client, ban.guild.id, `🔨 **${ban.user.tag}** was banned by **${by}** (${reason})`);
@@ -65,10 +69,12 @@ function setupModLogTracking(client) {
     const oldTimeout = oldMember.communicationDisabledUntilTimestamp;
     const newTimeout = newMember.communicationDisabledUntilTimestamp;
     if (oldTimeout !== newTimeout) {
-      const entry = await findAuditEntry(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
       // Same as bans above — AI automod's own embed already covers this,
-      // skip only this block, not role-change detection further below.
-      if (!entry?.reason?.startsWith('AI automod:')) {
+      // skip only this block (not role-change detection further below), and
+      // only via the tamper-proof marker, never the reason text. A removal
+      // (untimeout) is never marked by AI automod, so it's never suppressed.
+      if (!botActionRegistry.wasJustAutomated(newMember.guild.id, newMember.id, 'timeout')) {
+        const entry = await findAuditEntry(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
         const by = entry?.executor ? entry.executor.tag : 'unknown';
         const reason = entry?.reason || 'no reason given';
 

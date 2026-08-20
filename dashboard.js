@@ -44,6 +44,7 @@ const imageUpload = require('./imageUpload');
 const streamAlerts = require('./streamAlerts');
 const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
+const { fillPlaceholders } = require('./placeholders');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -673,17 +674,24 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       const channel = await client.channels.fetch(channelId);
       if (!channel || !channel.isTextBased()) return res.status(400).json({ error: 'Not a text channel' });
 
-      if (title || imageUrl) {
+      // No specific member triggers this (an admin wrote it, not a member's
+      // message), so only server/channel/date/time placeholders resolve —
+      // user-specific ones like {user} are left untouched in the text. See
+      // placeholders.js.
+      const filledMessage = fillPlaceholders(message, { channel });
+      const filledTitle = title ? fillPlaceholders(title, { channel }) : title;
+
+      if (filledTitle || imageUrl) {
         const embed = new EmbedBuilder()
-          .setDescription(message)
+          .setDescription(filledMessage)
           .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x3fe8d6)
           .setFooter(brandFooter(client))
           .setTimestamp();
-        if (title) embed.setTitle(title);
+        if (filledTitle) embed.setTitle(filledTitle);
         if (imageUrl) embed.setImage(imageUrl);
         await channel.send({ embeds: [embed] });
       } else {
-        await channel.send({ content: message });
+        await channel.send({ content: filledMessage });
       }
 
       audit(req.guildId, 'Sent message', `#${channel.name}`);
