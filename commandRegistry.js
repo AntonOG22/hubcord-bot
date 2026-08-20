@@ -5,7 +5,7 @@
 //
 // `run` returns a string to reply with, or throws an Error with a user-facing
 // message on failure — commandHandler.js takes care of sending the reply either way.
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType } = require('discord.js');
 const { brandFooter } = require('./brand');
 const { sendModerationDm } = require('./moderationDm');
 
@@ -1209,9 +1209,69 @@ cmd({
 
 // ===== HELP =====
 
+const HELP_PAGE_SIZE = 20;
+
+function paginateHelp(list, page) {
+  const totalPages = Math.max(1, Math.ceil(list.length / HELP_PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(page, 0), totalPages - 1);
+  const slice = list.slice(clampedPage * HELP_PAGE_SIZE, clampedPage * HELP_PAGE_SIZE + HELP_PAGE_SIZE);
+  return { slice, page: clampedPage, totalPages };
+}
+
+function buildHelpPayload(list, page, prefix, title) {
+  const { slice, page: clampedPage, totalPages } = paginateHelp(list, page);
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(slice.length ? slice.map((c) => `\`${prefix}${c.name}\` — ${c.description}`).join('\n') : 'No commands here.')
+    .setColor(0x3fe8d6)
+    .setFooter({ text: `Page ${clampedPage + 1}/${totalPages} • ${list.length} command${list.length === 1 ? '' : 's'}` });
+
+  const prevBtn = new ButtonBuilder().setCustomId('help_prev').setEmoji('◀️').setStyle(ButtonStyle.Secondary).setDisabled(clampedPage <= 0);
+  const nextBtn = new ButtonBuilder().setCustomId('help_next').setEmoji('▶️').setStyle(ButtonStyle.Secondary).setDisabled(clampedPage >= totalPages - 1);
+  const row = new ActionRowBuilder().addComponents(prevBtn, nextBtn);
+
+  return { embed, row, page: clampedPage, totalPages };
+}
+
+// Sends a paginated, scrollable command list — 20 per page, ◀️/▶️ buttons
+// that grey themselves out at either end. Only the person who ran the
+// command can page through it (anyone else clicking gets a quiet ephemeral
+// nudge to run their own); buttons disable themselves after 5 minutes of
+// no interaction so an old help message doesn't stay clickable forever.
+async function sendPaginatedHelp(message, list, prefix, title) {
+  let page = 0;
+  const first = buildHelpPayload(list, page, prefix, title);
+  page = first.page;
+  const sent = await message.channel.send({ embeds: [first.embed], components: [first.row] });
+  if (first.totalPages <= 1) return null; // nothing to page through, buttons would be permanently disabled anyway — skip the collector entirely
+
+  const collector = sent.createMessageComponentCollector({ componentType: ComponentType.Button, time: 5 * 60 * 1000 });
+
+  collector.on('collect', async (interaction) => {
+    if (interaction.user.id !== message.author.id) {
+      await interaction.reply({ content: "This isn't your help menu — run the command yourself to page through it.", ephemeral: true });
+      return;
+    }
+    page += interaction.customId === 'help_next' ? 1 : -1;
+    const updated = buildHelpPayload(list, page, prefix, title);
+    page = updated.page;
+    await interaction.update({ embeds: [updated.embed], components: [updated.row] });
+  });
+
+  collector.on('end', () => {
+    const disabled = new ActionRowBuilder().addComponents(
+      ButtonBuilder.from(sent.components[0].components[0]).setDisabled(true),
+      ButtonBuilder.from(sent.components[0].components[1]).setDisabled(true)
+    );
+    sent.edit({ components: [disabled] }).catch(() => {});
+  });
+
+  return null;
+}
+
 cmd({
   name: 'help', aliases: ['commands'], category: 'Info', permission: null,
-  usage: '[command|category]', description: 'Lists commands, or shows details for one command.',
+  usage: '[command|category]', description: 'Lists commands (20 per page, scroll with the buttons), shows one command\'s details, or lists a category\'s commands.',
   run: async (message, args) => {
     const prefix = commandConfig.getPrefix(message.guild.id);
 
@@ -1220,15 +1280,12 @@ cmd({
       if (found) {
         return `**${prefix}${found.name}** ${found.usage}\n${found.description}\n${found.permission ? 'Requires a moderation permission' : 'Available to everyone'}`;
       }
-      const category = commands.filter((c) => c.category.toLowerCase() === args[0].toLowerCase());
-      if (category.length) {
-        return `**${category[0].category} commands:**\n${category.map((c) => `\`${prefix}${c.name}\``).join(', ')}`;
-      }
-      return 'Command or category not found.';
+      const categoryMatch = commands.filter((c) => c.category.toLowerCase() === args[0].toLowerCase());
+      if (categoryMatch.length === 0) return 'Command or category not found.';
+      return sendPaginatedHelp(message, categoryMatch, prefix, `📖 ${categoryMatch[0].category} Commands`);
     }
 
-    const categories = [...new Set(commands.map((c) => c.category))];
-    return `**Command categories** (use \`${prefix}help <category>\` for details):\n${categories.join(', ')}\n\nTotal commands: ${commands.length}`;
+    return sendPaginatedHelp(message, commands, prefix, '📖 All Commands');
   },
 });
 
