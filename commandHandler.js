@@ -98,18 +98,59 @@ function setupCommandHandler(client, ctx) {
         await message.reply(reply).catch(() => {});
         return;
       }
-      try {
-        if (custom.embedTitle || custom.imageUrl) {
-          const embed = new EmbedBuilder()
-            .setDescription(custom.response)
-            .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
-            .setFooter(brandFooter(message.client));
-          if (custom.embedTitle) embed.setTitle(custom.embedTitle);
-          if (custom.imageUrl) embed.setImage(custom.imageUrl);
-          await message.reply({ embeds: [embed] });
-        } else {
-          await message.reply(custom.response);
+      if (!customCommands.canUse(custom, message.member)) {
+        await message.reply("🚫 You don't have permission to use this command.").catch(() => {});
+        return;
+      }
+
+      const cooldownRemaining = customCommands.checkCooldown(message.guild.id, message.author.id, custom);
+      if (cooldownRemaining) {
+        await message.reply(`⏳ This command is on cooldown — try again in ${cooldownRemaining}s.`).catch(() => {});
+        return;
+      }
+
+      const responseText = customCommands.fillPlaceholders(custom.response, message.member);
+      const titleText = custom.embedTitle ? customCommands.fillPlaceholders(custom.embedTitle, message.member) : null;
+
+      let payload;
+      if (custom.useEmbed) {
+        const embed = new EmbedBuilder()
+          .setDescription(responseText)
+          .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
+          .setFooter(brandFooter(message.client));
+        if (titleText) embed.setTitle(titleText);
+        if (custom.imageUrl) embed.setImage(custom.imageUrl);
+        payload = { embeds: [embed] };
+      } else {
+        payload = { content: responseText };
+      }
+
+      customCommands.recordUse(message.guild.id, message.author.id, custom);
+
+      if (custom.visibility === 'private') {
+        // Real ephemeral replies only exist for slash-command interactions —
+        // this is a prefix text command, so the closest equivalent is: DM the
+        // response, and delete the trigger message so nobody in the channel
+        // even sees what was typed.
+        await message.delete().catch(() => {});
+        try {
+          await message.author.send(payload);
+        } catch {
+          // DMs closed — best effort: a self-deleting channel message instead
+          // of failing silently, even though it's briefly visible to anyone
+          // watching that exact moment.
+          try {
+            const sent = await message.channel.send({ content: `${message.author}, I couldn't DM you (check your privacy settings) — sending it here instead, this message deletes itself shortly:`, ...payload });
+            setTimeout(() => sent.delete().catch(() => {}), 8000);
+          } catch (err) {
+            console.error(`Custom command "${custom.name}" private fallback failed:`, err.message);
+          }
         }
+        return;
+      }
+
+      try {
+        await message.reply(payload);
       } catch (err) {
         console.error(`Custom command "${custom.name}" failed:`, err);
       }

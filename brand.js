@@ -10,7 +10,7 @@
 // whatever informative text the embed already had (or no footer at all).
 const botSettings = require('./botSettings');
 
-const TAGLINE = 'Emerald — hubcord-bot.onrender.com';
+const TAGLINE = 'Emerald — emerald-bot-qpsq.onrender.com';
 
 function brandFooter(client, existingText) {
   if (botSettings.isWatermarkDisabled()) {

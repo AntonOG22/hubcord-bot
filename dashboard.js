@@ -1343,9 +1343,18 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.post('/api/custom-commands', requireGuildAccess, (req, res) => {
+    const body = req.body || {};
+    if (body.allowedRoleIds !== undefined) {
+      if (!Array.isArray(body.allowedRoleIds) || body.allowedRoleIds.some((id) => !req.guild.roles.cache.has(id))) {
+        return res.status(400).json({ error: 'allowedRoleIds must only contain roles in this server' });
+      }
+    }
+    if (body.visibility !== undefined && !['public', 'private'].includes(body.visibility)) {
+      return res.status(400).json({ error: 'visibility must be "public" or "private"' });
+    }
     try {
-      const list = customCommands.add(req.guildId, req.body || {});
-      audit(req.guildId, 'Added custom command', (req.body || {}).name);
+      const list = customCommands.add(req.guildId, body);
+      audit(req.guildId, 'Added custom command', body.name);
       res.json(list);
     } catch (err) {
       res.status(400).json({ error: err.message });

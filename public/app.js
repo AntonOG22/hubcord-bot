@@ -2196,24 +2196,34 @@ async function refreshCustomCommands() {
   const list = await res.json();
   const el = document.getElementById('customcmd-list');
 
+  renderCheckboxList('customcmd-roles', '/api/roles', [], (r) => r.name);
+
   if (list.length === 0) {
     el.innerHTML = '<span class="empty-hint">No custom commands yet.</span>';
     return;
   }
 
   el.innerHTML = list
-    .map(
-      (c) => `
+    .map((c) => {
+      const badges = [
+        c.useEmbed ? '📋 embed' : null,
+        c.visibility === 'private' ? '🔒 private' : null,
+        c.cooldownSeconds ? `⏳ ${c.cooldownSeconds}s cooldown` : null,
+        c.allowedRoleIds?.length ? `🎭 ${c.allowedRoleIds.length} role(s)` : null,
+        `used ${c.useCount || 0}×`,
+      ].filter(Boolean).join(' · ');
+      return `
     <div class="list-row">
       <div class="list-main">
         <div class="list-title"><code>!${escapeHtml(c.name)}</code></div>
         <div class="list-sub">${escapeHtml(c.response.slice(0, 80))}${c.response.length > 80 ? '…' : ''}</div>
+        <div class="list-sub muted small">${badges}</div>
       </div>
       <div class="list-actions">
         <button class="danger-button" data-customcmd-remove="${escapeHtml(c.name)}">Remove</button>
       </div>
-    </div>`
-    )
+    </div>`;
+    })
     .join('');
 
   document.querySelectorAll('[data-customcmd-remove]').forEach((btn) => {
@@ -2226,13 +2236,32 @@ async function addCustomCommand() {
   const name = document.getElementById('customcmd-name').value.trim();
   const response = document.getElementById('customcmd-response').value.trim();
   const imageUrl = document.getElementById('customcmd-image').value.trim();
+  const useEmbed = document.getElementById('customcmd-use-embed').checked;
+  const embedTitle = document.getElementById('customcmd-embed-title').value.trim();
+  const color = document.getElementById('customcmd-color').value;
+  const visibility = document.getElementById('customcmd-visibility').value;
+  const cooldownSeconds = parseInt(document.getElementById('customcmd-cooldown').value, 10) || 0;
+  const allowedRoleIds = getCheckedIds('customcmd-roles');
   if (!name || !response) return setFeedback(feedback, 'Give it a name and a response.', false);
 
-  const res = await api('/api/custom-commands', { method: 'POST', body: JSON.stringify({ name, response, imageUrl: imageUrl || undefined }) });
+  const res = await api('/api/custom-commands', {
+    method: 'POST',
+    body: JSON.stringify({
+      name, response, useEmbed,
+      embedTitle: embedTitle || undefined,
+      color: useEmbed ? color : undefined,
+      imageUrl: imageUrl || undefined,
+      visibility, cooldownSeconds, allowedRoleIds,
+    }),
+  });
   if (res.ok) {
     document.getElementById('customcmd-name').value = '';
     document.getElementById('customcmd-response').value = '';
     document.getElementById('customcmd-image').value = '';
+    document.getElementById('customcmd-embed-title').value = '';
+    document.getElementById('customcmd-use-embed').checked = false;
+    document.getElementById('customcmd-visibility').value = 'public';
+    document.getElementById('customcmd-cooldown').value = 0;
     setFeedback(feedback, 'Added!', true);
     refreshCustomCommands();
     refreshAuditLog();
