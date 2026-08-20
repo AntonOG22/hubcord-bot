@@ -12,6 +12,7 @@ const store = makeGuildStore('guild-config.json', () => ({
   announcementsChannelId: null,
   giveawayPingRoleId: null,
   announcementPingRoleId: null,
+  levelUpChannelId: null, // if unset, level-up messages post in whichever channel triggered them
   language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
   disabledFeatures: [], // feature keys turned off for this server — see features.js
 }));

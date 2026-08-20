@@ -284,7 +284,7 @@ const TOOLS = [
     parameters: {
       type: 'object',
       properties: {
-        supportRoleId: { type: 'string' },
+        supportRoleIds: { type: 'array', items: { type: 'string' }, description: 'Up to 3 role IDs, all pinged and given access on every new ticket' },
         closedCategoryChannelId: { type: 'string', description: 'Category closed tickets get moved into' },
         ticketNameFormat: { type: 'string', description: 'Use {username} and {count}' },
         welcomeMessage: { type: 'string', description: 'Use {user}' },

@@ -3,6 +3,7 @@
 // between them. Cooldown to prevent farming is also tracked per server+user.
 const { makeGuildStore } = require('./guildStore');
 const features = require('./features');
+const guildConfig = require('./guildConfig');
 
 const store = makeGuildStore('xp-state.json', () => ({})); // guildId -> { userId: { xp, level, tag } }
 const COOLDOWN_MS = 60 * 1000;
@@ -43,7 +44,22 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
 
     if (leveledUp) {
       try {
-        await message.channel.send(`🎉 ${message.author} just reached **Level ${user.level}**!`);
+        // Falls back to the channel they were chatting in if no level-up
+        // channel is configured, or if the configured one no longer exists/
+        // isn't fetchable (deleted channel, bot kicked from it, etc.) — a
+        // level-up should never silently go nowhere just because the
+        // configured channel became invalid.
+        const levelUpChannelId = guildConfig.getConfig(message.guild.id).levelUpChannelId;
+        let target = message.channel;
+        if (levelUpChannelId) {
+          try {
+            const configured = await message.guild.channels.fetch(levelUpChannelId);
+            if (configured?.isTextBased()) target = configured;
+          } catch {
+            // configured channel is gone/unfetchable — fall back to message.channel above
+          }
+        }
+        await target.send(`🎉 ${message.author} just reached **Level ${user.level}**!`);
       } catch (err) {
         console.error('Could not send level-up message:', err.message);
       }

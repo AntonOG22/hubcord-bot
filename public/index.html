@@ -514,8 +514,10 @@
             <h2>Global Settings</h2>
             <p class="muted small">Shared across every panel. Closing a ticket never posts anywhere — it hides the channel from whoever opened it and moves it into the category below, where staff can delete, transcript, or reopen it.</p>
 
-            <label class="field-label" for="ticket-support-role">Support role (added to every ticket)</label>
-            <select id="ticket-support-role"><option value="">— none —</option></select>
+            <label class="field-label">Support roles <span class="muted small">(up to 3, all pinged and given access on every new ticket)</span></label>
+            <select id="ticket-support-role-1"><option value="">— none —</option></select>
+            <select id="ticket-support-role-2" style="margin-top:8px"><option value="">— none —</option></select>
+            <select id="ticket-support-role-3" style="margin-top:8px"><option value="">— none —</option></select>
 
             <label class="field-label" for="ticket-closed-category">Closed tickets category</label>
             <select id="ticket-closed-category"><option value="">— none —</option></select>
@@ -862,6 +864,15 @@
 
         <div class="grid">
           <section class="card wide">
+            <h2>Level-Up Announcements</h2>
+            <p class="muted small">Where "🎉 X just reached Level Y!" gets posted. Leave unset and it posts in whichever channel the member was chatting in when they leveled up.</p>
+            <label class="field-label" for="settings-levelup-channel">Level-up channel</label>
+            <select id="settings-levelup-channel"><option value="">— post in the channel they leveled up in —</option></select>
+            <button id="levelup-channel-save-btn" class="primary-button">Save</button>
+            <p id="levelup-channel-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
             <h2>Leaderboard</h2>
             <div id="leaderboard-list" class="scroll-list tall"></div>
           </section>
@@ -877,6 +888,15 @@
         </div>
 
         <div class="grid">
+
+          <section class="card wide">
+            <h2>Bot Nickname</h2>
+            <p class="muted small">Changes how the bot's name is displayed on this server only — its real name and profile picture stay the same everywhere else. Discord doesn't support a per-server profile picture for bots, only a per-server name.</p>
+            <label class="field-label" for="bot-nickname-input">Nickname on this server <span class="muted small">(leave empty to reset to the bot's real name)</span></label>
+            <input id="bot-nickname-input" type="text" maxlength="32" placeholder="e.g. Emerald" />
+            <button id="bot-nickname-save-btn" class="primary-button">Save Nickname</button>
+            <p id="bot-nickname-feedback" class="feedback-text"></p>
+          </section>
 
           <section class="card wide">
             <h2>Server Settings</h2>

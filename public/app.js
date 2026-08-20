@@ -788,6 +788,7 @@ function init() {
     populateChannelSelect(document.getElementById('settings-counting-channel'), { withNone: true }),
     populateChannelSelect(document.getElementById('settings-modlogs-channel'), { withNone: true }),
     populateChannelSelect(document.getElementById('settings-announcements-channel'), { withNone: true }),
+    populateChannelSelect(document.getElementById('settings-levelup-channel'), { withNone: true }),
     populateRoleSelect(document.getElementById('settings-member-role'), { withNone: true }),
     populateRoleSelect(document.getElementById('settings-giveaway-ping-role'), { withNone: true }),
     populateRoleSelect(document.getElementById('settings-announcement-ping-role'), { withNone: true }),
@@ -802,7 +803,9 @@ function init() {
   Promise.all([
     populateCategorySelect(document.getElementById('ticket-closed-category'), { withNone: true }),
     populateCategorySelect(document.getElementById('ticket-panel-category'), { withNone: true }),
-    populateRoleSelect(document.getElementById('ticket-support-role'), { withNone: true }),
+    populateRoleSelect(document.getElementById('ticket-support-role-1'), { withNone: true }),
+    populateRoleSelect(document.getElementById('ticket-support-role-2'), { withNone: true }),
+    populateRoleSelect(document.getElementById('ticket-support-role-3'), { withNone: true }),
   ]).then(refreshTicketConfig);
 
   refreshEverything();
@@ -868,6 +871,7 @@ function init() {
 function refreshEverything() {
   refreshStatus();
   refreshGuildInfo();
+  refreshBotNickname();
   refreshActivity();
   refreshBans();
   refreshRoles();
@@ -2279,10 +2283,31 @@ async function refreshGuildSettings() {
   document.getElementById('settings-member-role').value = config.memberRoleId || '';
   document.getElementById('settings-modlogs-channel').value = config.modLogsChannelId || '';
   document.getElementById('settings-announcements-channel').value = config.announcementsChannelId || '';
+  document.getElementById('settings-levelup-channel').value = config.levelUpChannelId || '';
   document.getElementById('settings-giveaway-ping-role').value = config.giveawayPingRoleId || '';
   document.getElementById('settings-announcement-ping-role').value = config.announcementPingRoleId || '';
   document.getElementById('settings-language').value = config.language || 'en';
 }
+
+async function refreshBotNickname() {
+  const res = await api('/api/bot-nickname');
+  if (!res.ok) return;
+  const { nickname } = await res.json();
+  document.getElementById('bot-nickname-input').value = nickname || '';
+}
+
+document.getElementById('bot-nickname-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('bot-nickname-feedback');
+  const nickname = document.getElementById('bot-nickname-input').value.trim();
+  const res = await api('/api/bot-nickname', { method: 'POST', body: JSON.stringify({ nickname: nickname || null }) });
+  if (res.ok) {
+    setFeedback(feedback, nickname ? `Nickname on this server set to "${nickname}".` : 'Reset to the bot\'s default name.', true);
+    refreshAuditLog();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, data.error || 'Failed to save — try again.', false);
+  }
+});
 
 async function refreshFeatureToggles() {
   const res = await api('/api/features');
@@ -2337,6 +2362,18 @@ async function saveGuildSettings() {
   }
 }
 
+document.getElementById('levelup-channel-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('levelup-channel-feedback');
+  const levelUpChannelId = document.getElementById('settings-levelup-channel').value || null;
+  const res = await api('/api/guild-config', { method: 'POST', body: JSON.stringify({ levelUpChannelId }) });
+  if (res.ok) {
+    setFeedback(feedback, 'Saved!', true);
+    refreshAuditLog();
+  } else {
+    setFeedback(feedback, 'Failed to save.', false);
+  }
+});
+
 // ---------- Tickets ----------
 
 let ticketPanelsCache = [];
@@ -2346,7 +2383,10 @@ async function refreshTicketConfig() {
   if (!res.ok) return;
   const config = await res.json();
 
-  document.getElementById('ticket-support-role').value = config.supportRoleId || '';
+  const supportRoleIds = config.supportRoleIds || [];
+  document.getElementById('ticket-support-role-1').value = supportRoleIds[0] || '';
+  document.getElementById('ticket-support-role-2').value = supportRoleIds[1] || '';
+  document.getElementById('ticket-support-role-3').value = supportRoleIds[2] || '';
   document.getElementById('ticket-closed-category').value = config.closedCategoryChannelId || '';
   document.getElementById('ticket-name-format').value = config.ticketNameFormat || '';
   document.getElementById('ticket-welcome-message').value = config.welcomeMessage || '';
@@ -2426,8 +2466,15 @@ async function removeTicketPanel(id) {
 
 async function saveTicketConfig() {
   const feedback = document.getElementById('ticket-config-feedback');
+  const supportRoleIds = [...new Set(
+    [
+      document.getElementById('ticket-support-role-1').value,
+      document.getElementById('ticket-support-role-2').value,
+      document.getElementById('ticket-support-role-3').value,
+    ].filter(Boolean)
+  )];
   const patch = {
-    supportRoleId: document.getElementById('ticket-support-role').value || null,
+    supportRoleIds,
     closedCategoryChannelId: document.getElementById('ticket-closed-category').value || null,
     ticketNameFormat: document.getElementById('ticket-name-format').value || 'ticket-{username}',
     welcomeMessage: document.getElementById('ticket-welcome-message').value,
@@ -2768,7 +2815,9 @@ const FEATURE_INDEX = [
   { label: 'Stream Alerts (Twitch/YouTube)', tab: 'automation' },
 
   { label: 'Leaderboard / XP', tab: 'leveling' },
+  { label: 'Level-Up Announcement Channel', tab: 'leveling' },
 
+  { label: 'Bot Nickname', tab: 'server' },
   { label: 'Server Settings', tab: 'server' },
   { label: 'Bot Language', tab: 'server' },
   { label: 'Feature Toggles (XP, automod, anti-raid, etc.)', tab: 'server' },

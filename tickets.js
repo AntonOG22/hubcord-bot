@@ -13,8 +13,10 @@ const { makeGuildStore, safeAssign } = require('./guildStore');
 const { t } = require('./i18n');
 const { brandFooter } = require('./brand');
 
+const MAX_SUPPORT_ROLES = 3;
+
 const configStore = makeGuildStore('ticket-config.json', () => ({
-  supportRoleId: null,
+  supportRoleIds: [], // up to MAX_SUPPORT_ROLES roles, all pinged + given access on a new ticket
   closedCategoryChannelId: null,
   ticketNameFormat: 'ticket-{username}',
   welcomeMessage: "Thanks for reaching out, {user}! Support will be with you shortly.\nDescribe your issue below and a staff member will help soon.",
@@ -135,8 +137,8 @@ async function openTicket(interaction, panelId) {
     { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
     { id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
   ];
-  if (config.supportRoleId) {
-    overwrites.push({ id: config.supportRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+  for (const roleId of config.supportRoleIds || []) {
+    overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
   }
 
   let channel;
@@ -179,7 +181,7 @@ async function openTicket(interaction, panelId) {
     .setTimestamp();
 
   await channel.send({
-    content: config.supportRoleId ? `<@&${config.supportRoleId}> ${member}` : `${member}`,
+    content: `${(config.supportRoleIds || []).map((id) => `<@&${id}>`).join(' ')} ${member}`.trim(),
     embeds: [embed],
     components: [openControlsRow(guild.id)],
   });
@@ -410,7 +412,16 @@ function setupTickets(client) {
 // ---------- Config & info (used by the dashboard and by chat commands) ----------
 
 function getConfig(guildId) {
-  return configStore.get(guildId);
+  const config = configStore.get(guildId);
+  // One-time migration from the old single supportRoleId field to the new
+  // up-to-3 supportRoleIds array — existing servers keep their configured
+  // role instead of silently losing it the first time this runs.
+  if (!config.supportRoleIds) {
+    config.supportRoleIds = config.supportRoleId ? [config.supportRoleId] : [];
+    delete config.supportRoleId;
+    configStore.save();
+  }
+  return config;
 }
 
 function updateConfig(guildId, patch) {
@@ -483,6 +494,7 @@ function getStats(guildId) {
 }
 
 module.exports = {
+  MAX_SUPPORT_ROLES,
   setupTickets,
   getConfig,
   updateConfig,

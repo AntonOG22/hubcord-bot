@@ -524,6 +524,28 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     });
   });
 
+  // Per-server display name only — Discord's own Change Nickname mechanism.
+  // The bot's real username and avatar are unaffected, and this has no
+  // effect on any other server the bot is in. Discord doesn't currently let
+  // bots set a per-server profile picture at all (user accounts only), so
+  // there's no equivalent avatar route here — see setNickname's own error
+  // handling below for the one real failure mode (bot's own role too low).
+  app.get('/api/bot-nickname', requireGuildAccess, (req, res) => {
+    res.json({ nickname: req.guild.members.me?.nickname || null });
+  });
+
+  app.post('/api/bot-nickname', requireGuildAccess, async (req, res) => {
+    const { nickname } = req.body || {};
+    const clean = nickname == null ? null : String(nickname).trim().slice(0, 32) || null;
+    try {
+      await req.guild.members.me.setNickname(clean);
+      audit(req.guildId, 'Changed bot nickname', clean || '(reset to default)');
+      res.json({ nickname: clean });
+    } catch (err) {
+      res.status(400).json({ error: `Could not change nickname — the bot needs "Change Nickname" permission on this server. (${err.message})` });
+    }
+  });
+
   app.get('/api/channels', requireGuildAccess, (req, res) => {
     const channels = req.guild.channels.cache
       .filter((c) => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement)
@@ -1330,8 +1352,17 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.post('/api/tickets/config', requireGuildAccess, (req, res) => {
-    const config = tickets.updateConfig(req.guildId, req.body || {});
-    audit(req.guildId, 'Updated ticket settings', Object.keys(req.body || {}).join(', '));
+    const patch = req.body || {};
+    if (patch.supportRoleIds !== undefined) {
+      if (!Array.isArray(patch.supportRoleIds) || patch.supportRoleIds.length > tickets.MAX_SUPPORT_ROLES) {
+        return res.status(400).json({ error: `You can set at most ${tickets.MAX_SUPPORT_ROLES} support roles.` });
+      }
+      if (patch.supportRoleIds.some((id) => !req.guild.roles.cache.has(id))) {
+        return res.status(400).json({ error: 'One of those roles is not in this server.' });
+      }
+    }
+    const config = tickets.updateConfig(req.guildId, patch);
+    audit(req.guildId, 'Updated ticket settings', Object.keys(patch).join(', '));
     res.json(config);
   });
 
