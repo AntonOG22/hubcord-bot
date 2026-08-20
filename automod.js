@@ -92,7 +92,7 @@ async function flag(guildId, channel, member, reason) {
 }
 
 function isIgnored(guildId, message) {
-  const config = store.get(guildId);
+  const config = getConfig(guildId);
   if (config.ignoreChannelIds.includes(message.channelId)) return true;
   if (message.member && config.ignoreRoleIds.some((id) => message.member.roles.cache.has(id))) return true;
   return false;
@@ -209,7 +209,7 @@ function setupAutomod(client) {
     if (!message.member || message.member.permissions.has('ManageMessages')) return; // staff exempt
     if (isIgnored(message.guild.id, message)) return;
 
-    const config = store.get(message.guild.id);
+    const config = getConfig(message.guild.id);
     const content = message.content;
 
     if (config.inviteFilter && INVITE_RE.test(content)) {
@@ -294,7 +294,7 @@ function setupAutomod(client) {
   });
 
   client.on('guildMemberAdd', async (member) => {
-    const config = store.get(member.guild.id);
+    const config = getConfig(member.guild.id);
     if (!config.accountAgeGateDays) return;
     const ageDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
     if (ageDays < config.accountAgeGateDays) {
@@ -310,12 +310,29 @@ function setupAutomod(client) {
   console.log('Auto-moderation active (per-server settings).');
 }
 
+// Guilds configured before a given field existed have a saved record that
+// predates it entirely (missing, not just falsy) — makeGuildStore only
+// applies DEFAULTS() to a brand-new record, never backfills an existing
+// one. Every automod filter that calls an array/object method directly on
+// a config field (e.g. ignoreChannelIds.includes(...)) will crash for those
+// older records unless the field is backfilled first, so every read in this
+// file goes through this instead of a raw store.get().
 function getConfig(guildId) {
-  return store.get(guildId);
+  const config = store.get(guildId);
+  const defaults = DEFAULTS();
+  let changed = false;
+  for (const key of Object.keys(defaults)) {
+    if (!(key in config)) {
+      config[key] = defaults[key];
+      changed = true;
+    }
+  }
+  if (changed) store.save();
+  return config;
 }
 
 function updateConfig(guildId, patch) {
-  const config = safeAssign(store.get(guildId), patch);
+  const config = safeAssign(getConfig(guildId), patch);
   store.save();
   return config;
 }
