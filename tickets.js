@@ -12,6 +12,7 @@ const {
 const { makeGuildStore, safeAssign } = require('./guildStore');
 const { t } = require('./i18n');
 const { brandFooter } = require('./brand');
+const { stripColorCodes, applyLinkMasking } = require('./textFormatting');
 
 const MAX_SUPPORT_ROLES = 3;
 
@@ -46,9 +47,12 @@ function buildTicketName(config, member, number) {
 }
 
 function buildPanelEmbed(panel, client) {
+  // Always an embed, so "label"(url) masked links work here — see
+  // textFormatting.js. §colors never render in embeds, so any typed in by
+  // mistake are stripped rather than shown as literal §red text.
   return new EmbedBuilder()
-    .setTitle(panel.panelTitle)
-    .setDescription(panel.panelDescription)
+    .setTitle(applyLinkMasking(stripColorCodes(panel.panelTitle)))
+    .setDescription(applyLinkMasking(stripColorCodes(panel.panelDescription)))
     .setColor(colorToInt(panel.panelColor))
     .setFooter(brandFooter(client));
 }
@@ -175,7 +179,7 @@ async function openTicket(interaction, panelId) {
 
   const embed = new EmbedBuilder()
     .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: panel.name }))
-    .setDescription(config.welcomeMessage.replace('{user}', `${member}`))
+    .setDescription(applyLinkMasking(stripColorCodes(config.welcomeMessage.replace('{user}', `${member}`))))
     .setColor(colorToInt(panel.panelColor))
     .setFooter(brandFooter(interaction.client, t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag })))
     .setTimestamp();

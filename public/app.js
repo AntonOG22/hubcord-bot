@@ -365,6 +365,109 @@ PLACEHOLDER_FIELDS.forEach((id) => {
   if (el) wirePlaceholderAutocomplete(el);
 });
 
+// ---------- § color-code autocomplete ----------
+//
+// §color wraps text in an ANSI-colored code block when the bot sends it as
+// plain content — Discord has no real per-word text color otherwise. Only
+// wired to fields that actually get sent as plain content in at least one
+// of their modes (custom command response, auto-response reply, Send a
+// Message's message box) — title/embed-only fields never render color at
+// all, so no autocomplete there. See textFormatting.js for the full story,
+// including why this doesn't work in embeds and mobile can't show it either.
+const COLOR_CODE_LIST = [
+  { token: '§red', desc: 'red text', color: '#ed4245' },
+  { token: '§green', desc: 'green text', color: '#57f287' },
+  { token: '§yellow', desc: 'yellow text', color: '#fee75c' },
+  { token: '§blue', desc: 'blue text', color: '#5865f2' },
+  { token: '§pink', desc: 'pink text', color: '#eb459e' },
+  { token: '§cyan', desc: 'cyan text', color: '#3fe8d6' },
+  { token: '§white', desc: 'white text', color: '#ffffff' },
+  { token: '§gray', desc: 'gray text', color: '#99aab5' },
+  { token: '§reset', desc: 'back to normal', color: '#747f8d' },
+];
+const COLOR_CODE_FIELDS = new Set(['customcmd-response', 'autoresponse-reply', 'message-input']);
+
+function wireColorCodeAutocomplete(input) {
+  let dropdown = null;
+  let markIndex = -1;
+
+  function closeDropdown() {
+    if (dropdown) {
+      dropdown.remove();
+      dropdown = null;
+    }
+  }
+
+  function positionDropdown() {
+    if (!dropdown) return;
+    const rect = input.getBoundingClientRect();
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.width = `${Math.max(rect.width, 220)}px`;
+  }
+
+  function selectResult(token) {
+    const value = input.value;
+    const caret = input.selectionStart;
+    const newValue = value.slice(0, markIndex) + token + ' ' + value.slice(caret);
+    input.value = newValue;
+    const newCaret = markIndex + token.length + 1;
+    input.focus();
+    input.setSelectionRange(newCaret, newCaret);
+    closeDropdown();
+  }
+
+  function renderResults(matches) {
+    closeDropdown();
+    dropdown = document.createElement('div');
+    dropdown.className = 'mention-dropdown';
+    dropdown.innerHTML = matches.length
+      ? matches
+          .map(
+            (c) => `
+        <div class="mention-result" data-token="${escapeHtml(c.token)}">
+          <span class="mention-role-dot" style="background:${c.color}"></span>
+          <span class="mention-label"><code>${escapeHtml(c.token)}</code> — ${escapeHtml(c.desc)}</span>
+        </div>`
+          )
+          .join('')
+      : '<div class="mention-empty">No matching color</div>';
+
+    document.body.appendChild(dropdown);
+    positionDropdown();
+
+    dropdown.querySelectorAll('[data-token]').forEach((row) => {
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectResult(row.dataset.token);
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    const value = input.value;
+    const caret = input.selectionStart;
+    const textBeforeCaret = value.slice(0, caret);
+    const foundMark = textBeforeCaret.lastIndexOf('§');
+    if (foundMark === -1 || /\s/.test(textBeforeCaret.slice(foundMark + 1))) {
+      closeDropdown();
+      return;
+    }
+    markIndex = foundMark;
+    const query = textBeforeCaret.slice(foundMark + 1).toLowerCase();
+    const matches = COLOR_CODE_LIST.filter((c) => c.token.slice(1).toLowerCase().startsWith(query));
+    renderResults(matches);
+  });
+
+  input.addEventListener('blur', () => setTimeout(closeDropdown, 150));
+  window.addEventListener('scroll', () => dropdown && positionDropdown(), true);
+}
+
+COLOR_CODE_FIELDS.forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) wireColorCodeAutocomplete(el);
+});
+
 async function boot() {
   try {
     const res = await api('/api/me');

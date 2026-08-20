@@ -312,7 +312,7 @@
 
           <section class="card wide">
             <h2>Send a Message</h2>
-            <p class="muted small">Post as the bot into any text channel on the server. Supports server/channel/date/time placeholders like <code>{server}</code> and <code>{membercount}</code> — see the Guides tab for the full list (member-specific ones like <code>{user}</code> don't apply here since no one member triggers this).</p>
+            <p class="muted small">Post as the bot into any text channel on the server. Supports server/channel/date/time placeholders like <code>{server}</code> and <code>{membercount}</code> — see the Guides tab for the full list (member-specific ones like <code>{user}</code> don't apply here since no one member triggers this). Message box also supports <code>§color</code> text coloring (only when there's no title/image, since that switches this to an embed) — see Guides for details and limits.</p>
 
             <label class="field-label" for="channel-select">Channel</label>
             <select id="channel-select"></select>
@@ -562,7 +562,7 @@
 
           <section class="card wide">
             <h2>Custom Commands</h2>
-            <p class="muted small">Make your own command that replies with fixed text — e.g. <code>!rules</code>. Different from auto-responses: this only fires on an exact command, not a word anywhere in a message. Response and embed title support placeholders like <code>{user}</code> and <code>{server}</code> — see the Guides tab for the full list.</p>
+            <p class="muted small">Make your own command that replies with fixed text — e.g. <code>!rules</code>. Different from auto-responses: this only fires on an exact command, not a word anywhere in a message. Response and embed title support placeholders like <code>{user}</code> and <code>{server}</code> — see the Guides tab for the full list. Response also supports <code>§color</code> text coloring when "Post as an embed" is off, and <code>"label" (link)</code> masked links when it's on — see Guides.</p>
             <div class="row">
               <input id="customcmd-name" type="text" placeholder="Command name (no prefix), e.g. rules" />
             </div>
@@ -656,7 +656,7 @@
             <label class="field-label" for="ticket-name-format">Channel name format <span class="muted small">(use {username} and {count})</span></label>
             <input id="ticket-name-format" type="text" placeholder="ticket-{username}" />
 
-            <label class="field-label" for="ticket-welcome-message">Welcome message inside new tickets <span class="muted small">(use {user})</span></label>
+            <label class="field-label" for="ticket-welcome-message">Welcome message inside new tickets <span class="muted small">(use {user} — this is always an embed, so <code>"label" (link)</code> masked links work here, but §colors don't — see Guides)</span></label>
             <textarea id="ticket-welcome-message" rows="3"></textarea>
 
             <div class="row">
@@ -687,7 +687,7 @@
             </div>
             <label class="field-label" for="ticket-panel-title">Embed title</label>
             <input id="ticket-panel-title" type="text" placeholder="🐛 Bug Reports" />
-            <label class="field-label" for="ticket-panel-description">Embed description</label>
+            <label class="field-label" for="ticket-panel-description">Embed description <span class="muted small">(<code>"label" (link)</code> masked links work here — see Guides)</span></label>
             <textarea id="ticket-panel-description" rows="2" placeholder="Found a bug? Click below to open a private ticket with our team."></textarea>
             <label class="field-label" for="ticket-panel-color">Embed color</label>
             <input id="ticket-panel-color" type="color" value="#3fe8d6" />
@@ -857,7 +857,7 @@
 
           <section class="card wide">
             <h2>Auto-Responses</h2>
-            <p class="muted small">Bot replies automatically when a message contains the trigger word. The reply supports placeholders like <code>{user}</code> and <code>{server}</code> — see the Guides tab for the full list.</p>
+            <p class="muted small">Bot replies automatically when a message contains the trigger word. The reply supports placeholders like <code>{user}</code> and <code>{server}</code>, and <code>§color</code> text coloring — see the Guides tab for the full list and details.</p>
             <div class="row">
               <input id="autoresponse-trigger" type="text" placeholder="Trigger word…" />
               <input id="autoresponse-reply" type="text" placeholder="Bot's reply…" />
@@ -1113,6 +1113,21 @@
               </div>
             </div>
             <p class="muted small guide-tip">Tip: combine both in the channel name format, e.g. <code>{count}-{username}</code> → <code>42-anton</code>, so channels sort by ticket number but still show who opened them.</p>
+          </section>
+
+          <section class="card wide">
+            <h2>Text Coloring &amp; Masked Links</h2>
+            <p class="muted small">Two Discord tricks you can type directly into a message field — each only works in one specific situation, because Discord itself only supports them there. They're mirror images of each other, so a given message can use one or the other, never both.</p>
+            <div class="guide-var-list">
+              <div class="guide-var-row">
+                <code>§color</code>
+                <span><strong>Only works in plain text messages</strong> (Custom Commands with "Post as an embed" off, Auto-Responses, Send a Message with no title/image). Wraps the text in a colored code block — type <code>§red</code>, <code>§green</code>, <code>§yellow</code>, <code>§blue</code>, <code>§pink</code>, <code>§cyan</code>, <code>§white</code>, or <code>§gray</code>, then <code>§reset</code> to go back to normal. This is the only way Discord shows any text color at all — there's no arbitrary hex color, the text renders in a monospace font, and <strong>it doesn't show up on Discord mobile</strong> (shows raw code instead). Autocomplete appears when you type <code>§</code>.</span>
+              </div>
+              <div class="guide-var-row">
+                <code>"label" (https://link)</code>
+                <span><strong>Only works inside embeds</strong> (Custom Commands with "Post as an embed" on, Send a Message with a title/image, Ticket welcome messages, Ticket panel titles/descriptions — those are always embeds). Turns into a real clickable link showing just "label" instead of the raw URL. In plain text messages this just shows as literal text, not a link.</span>
+              </div>
+            </div>
           </section>
 
           <section class="card wide">

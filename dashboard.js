@@ -45,6 +45,7 @@ const streamAlerts = require('./streamAlerts');
 const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
 const { fillPlaceholders } = require('./placeholders');
+const { applyColorCodes, stripColorCodes, applyLinkMasking } = require('./textFormatting');
 const helmet = require('helmet');
 
 const PERMISSION_NAMES = Object.fromEntries(
@@ -730,17 +731,20 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       const filledMessage = fillPlaceholders(message, { channel });
       const filledTitle = title ? fillPlaceholders(title, { channel }) : title;
 
+      // §color and "label"(url) are each other's mirror image — one only
+      // renders in plain content, the other only inside an embed. See
+      // textFormatting.js.
       if (filledTitle || imageUrl) {
         const embed = new EmbedBuilder()
-          .setDescription(filledMessage)
+          .setDescription(applyLinkMasking(stripColorCodes(filledMessage)))
           .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x3fe8d6)
           .setFooter(brandFooter(client))
           .setTimestamp();
-        if (filledTitle) embed.setTitle(filledTitle);
+        if (filledTitle) embed.setTitle(applyLinkMasking(stripColorCodes(filledTitle)));
         if (imageUrl) embed.setImage(imageUrl);
         await channel.send({ embeds: [embed] });
       } else {
-        await channel.send({ content: filledMessage });
+        await channel.send({ content: applyColorCodes(filledMessage) });
       }
 
       audit(req.guildId, 'Sent message', `#${channel.name}`);

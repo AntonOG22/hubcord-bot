@@ -3,6 +3,7 @@
 const { makeGuildStore } = require('./guildStore');
 const features = require('./features');
 const { fillPlaceholders } = require('./placeholders');
+const { applyColorCodes } = require('./textFormatting');
 
 const store = makeGuildStore('autoresponses-state.json', () => []); // guildId -> [{id, trigger, reply}]
 
@@ -17,7 +18,11 @@ function setupAutoResponses(client) {
     if (!match) return;
 
     try {
-      await message.reply(fillPlaceholders(match.reply, { member: message.member, channel: message.channel }));
+      // Auto-responses always send as plain content, never an embed — so
+      // §colors work here (applyColorCodes), but "label"(url) link masking
+      // never would, and is deliberately left alone rather than converted.
+      const filled = fillPlaceholders(match.reply, { member: message.member, channel: message.channel });
+      await message.reply(applyColorCodes(filled));
     } catch (err) {
       console.error('Auto-response send failed:', err.message);
     }

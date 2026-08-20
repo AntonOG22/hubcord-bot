@@ -10,6 +10,7 @@ const customCommands = require('./customCommands');
 const { EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
 const { t } = require('./i18n');
+const { applyColorCodes, stripColorCodes, applyLinkMasking } = require('./textFormatting');
 
 const commandMap = new Map();
 for (const c of commands) {
@@ -112,17 +113,22 @@ function setupCommandHandler(client, ctx) {
       const responseText = customCommands.fillPlaceholders(custom.response, message.member, message.channel);
       const titleText = custom.embedTitle ? customCommands.fillPlaceholders(custom.embedTitle, message.member, message.channel) : null;
 
+      // §color and "label"(url) are each other's mirror image — one only
+      // renders in plain content, the other only inside an embed. Apply
+      // whichever actually works for the path this command is taking, and
+      // strip the other's raw syntax so it doesn't show up as literal
+      // leftover text. See textFormatting.js.
       let payload;
       if (custom.useEmbed) {
         const embed = new EmbedBuilder()
-          .setDescription(responseText)
+          .setDescription(applyLinkMasking(stripColorCodes(responseText)))
           .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
           .setFooter(brandFooter(message.client));
-        if (titleText) embed.setTitle(titleText);
+        if (titleText) embed.setTitle(applyLinkMasking(stripColorCodes(titleText)));
         if (custom.imageUrl) embed.setImage(custom.imageUrl);
         payload = { embeds: [embed] };
       } else {
-        payload = { content: responseText };
+        payload = { content: applyColorCodes(responseText) };
       }
 
       customCommands.recordUse(message.guild.id, message.author.id, custom);
