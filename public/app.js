@@ -777,6 +777,10 @@ async function loadAdminOverview() {
             <div class="list-title">${escapeHtml(g.name)}</div>
             <div class="list-sub"><span>${g.memberCount.toLocaleString()} members</span><span>Boost tier ${g.boostTier}</span></div>
           </div>
+          <label class="toggle-switch" title="Hide the Emerald watermark on this server's embeds only (announcements/broadcasts always keep it)">
+            <input type="checkbox" data-admin-guild-watermark="${g.id}" ${g.watermarkDisabled ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
           <div class="list-actions">
             <button class="secondary-button" data-admin-manage="${g.id}">Manage</button>
             <button class="danger-button" data-admin-leave="${g.id}" data-admin-leave-name="${escapeHtml(g.name)}">Leave</button>
@@ -784,6 +788,15 @@ async function loadAdminOverview() {
         </div>`;
     })
     .join('');
+
+  list.querySelectorAll('[data-admin-guild-watermark]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const guildId = input.dataset.adminGuildWatermark;
+      const disabled = input.checked;
+      const res = await api(`/api/admin/guilds/${guildId}/watermark`, { method: 'POST', body: JSON.stringify({ disabled }) });
+      if (!res.ok) input.checked = !disabled; // revert on failure
+    });
+  });
 
   list.querySelectorAll('[data-admin-leave]').forEach((btn) => {
     btn.addEventListener('click', async () => {

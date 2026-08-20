@@ -15,8 +15,8 @@ function colorToInt(hex) {
   return parseInt((hex || '#3fe8d6').replace('#', ''), 16) || 0x3fe8d6;
 }
 
-function buildPanelEmbed(panel) {
-  return new EmbedBuilder().setTitle(panel.title).setDescription(panel.description).setColor(colorToInt(panel.color)).setFooter(brandFooter(clientRef));
+function buildPanelEmbed(panel, guildId) {
+  return new EmbedBuilder().setTitle(panel.title).setDescription(panel.description).setColor(colorToInt(panel.color)).setFooter(brandFooter(clientRef, guildId));
 }
 
 function buildPanelComponents(panel) {
@@ -107,7 +107,7 @@ async function postPanel(client, guildId, panelId, channelId) {
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) throw new Error('Panel not found.');
   const channel = await client.channels.fetch(channelId);
-  await channel.send({ embeds: [buildPanelEmbed(panel)], components: buildPanelComponents(panel) });
+  await channel.send({ embeds: [buildPanelEmbed(panel, guildId)], components: buildPanelComponents(panel) });
 }
 
 module.exports = { setupRolePanels, getPanels, addPanel, removePanel, addRole, removeRole, postPanel };

@@ -28,7 +28,7 @@ function buildEmbed(guildId, prize, winnerCount, endsAt, ended, winners) {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 Giveaway: ${prize}`)
     .setColor(ended ? 0x99aab5 : 0x57f287)
-    .setFooter(brandFooter(clientRef))
+    .setFooter(brandFooter(clientRef, guildId))
     .setTimestamp();
 
   if (ended) {

@@ -40,7 +40,7 @@ async function sendMessage(client, member, config) {
 
     const embed = new EmbedBuilder()
       .setColor(colorToInt(config.color))
-      .setFooter(brandFooter(client))
+      .setFooter(brandFooter(client, member.guild.id))
       .setTimestamp();
 
     if (config.title) embed.setTitle(fillPlaceholders(config.title, member));

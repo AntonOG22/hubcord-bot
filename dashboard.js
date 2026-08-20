@@ -420,6 +420,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
         icon: g.iconURL({ size: 64 }),
         memberCount: g.memberCount,
         boostTier: g.premiumTier,
+        watermarkDisabled: !!guildConfig.getConfig(g.id).watermarkDisabled,
       }))
       .sort((a, b) => b.memberCount - a.memberCount);
 
@@ -443,6 +444,21 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const settings = botSettings.setWatermarkDisabled(!!disabled);
     audit('_global', 'Toggled bot watermark', settings.watermarkDisabled ? 'disabled' : 'enabled');
     res.json(settings);
+  });
+
+  // Per-server version of the switch above — hides the watermark only on
+  // this one server's embeds (join/leave messages, tickets, role panels,
+  // giveaways, custom commands, everything brand.js touches), regardless of
+  // the bot-wide switch's state. Official announcements/broadcasts are never
+  // affected by either switch — see buildOfficialAnnouncementEmbed, which
+  // doesn't call brandFooter() at all.
+  app.post('/api/admin/guilds/:guildId/watermark', requireOwner, (req, res) => {
+    const guild = client.guilds.cache.get(req.params.guildId);
+    if (!guild) return res.status(404).json({ error: 'Server not found' });
+    const { disabled } = req.body || {};
+    const config = guildConfig.updateConfig(req.params.guildId, { watermarkDisabled: !!disabled });
+    audit(req.params.guildId, 'Toggled per-server watermark', config.watermarkDisabled ? 'disabled' : 'enabled');
+    res.json({ watermarkDisabled: config.watermarkDisabled });
   });
 
   // ---------- Global feature kill-switch ----------
@@ -738,7 +754,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
         const embed = new EmbedBuilder()
           .setDescription(applyLinkMasking(stripColorCodes(filledMessage)))
           .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x3fe8d6)
-          .setFooter(brandFooter(client))
+          .setFooter(brandFooter(client, req.guildId))
           .setTimestamp();
         if (filledTitle) embed.setTitle(applyLinkMasking(stripColorCodes(filledTitle)));
         if (imageUrl) embed.setImage(imageUrl);
@@ -763,7 +779,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
     try {
       const channel = await client.channels.fetch(announcementsChannelId);
-      const embed = new EmbedBuilder().setTitle(template.title).setDescription(template.description).setColor(template.color).setFooter(brandFooter(client)).setTimestamp();
+      const embed = new EmbedBuilder().setTitle(template.title).setDescription(template.description).setColor(template.color).setFooter(brandFooter(client, req.guildId)).setTimestamp();
       await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
       audit(req.guildId, 'Sent announcement template', type);
       res.json({ ok: true });
@@ -783,7 +799,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     try {
       const channel = await client.channels.fetch(channelId);
       const description = options.map((opt, i) => `${NUMBER_EMOJI[i]} ${opt}`).join('\n\n');
-      const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(description).setColor(0x3fe8d6).setFooter(brandFooter(client)).setTimestamp();
+      const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(description).setColor(0x3fe8d6).setFooter(brandFooter(client, req.guildId)).setTimestamp();
       const msg = await channel.send({ embeds: [embed] });
       for (let i = 0; i < options.length; i++) await msg.react(NUMBER_EMOJI[i]);
       audit(req.guildId, 'Created poll', `"${question}" in #${channel.name}`);
@@ -853,7 +869,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
       // Sent before the ban, not after — once banned, the bot and this user
       // very likely no longer share a server, and Discord won't reliably
       // deliver a DM at that point.
-      await sendModerationDm(client, user, req.guild.name, { action: 'ban', reason, moderatorTag: req.session.username });
+      await sendModerationDm(client, user, req.guild, { action: 'ban', reason, moderatorTag: req.session.username });
       await req.guild.members.ban(userId, {
         reason: reason || 'No reason given',
         deleteMessageSeconds: (parseInt(deleteMessageDays, 10) || 0) * 86400,
@@ -893,7 +909,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     try {
       const member = await req.guild.members.fetch(userId);
       await member.timeout(parseInt(minutes, 10) * 60 * 1000, reason || 'No reason given');
-      await sendModerationDm(client, member, req.guild.name, { action: 'timeout', reason, moderatorTag: req.session.username, durationText: `${minutes} minutes` });
+      await sendModerationDm(client, member, req.guild, { action: 'timeout', reason, moderatorTag: req.session.username, durationText: `${minutes} minutes` });
       audit(req.guildId, 'Timed out member', `${member.user.tag} for ${minutes}m (${reason || 'no reason'})`);
       res.json({ ok: true });
     } catch (err) {

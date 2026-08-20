@@ -123,7 +123,7 @@ function setupCommandHandler(client, ctx) {
         const embed = new EmbedBuilder()
           .setDescription(applyLinkMasking(stripColorCodes(responseText)))
           .setColor(custom.color ? parseInt(custom.color.replace('#', ''), 16) : 0x3ecf8e)
-          .setFooter(brandFooter(message.client));
+          .setFooter(brandFooter(message.client, message.guild.id));
         if (titleText) embed.setTitle(applyLinkMasking(stripColorCodes(titleText)));
         if (custom.imageUrl) embed.setImage(custom.imageUrl);
         payload = { embeds: [embed] };

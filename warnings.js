@@ -24,14 +24,14 @@ async function addWarning(client, guild, userId, reason, byTag) {
     member = null; // they may have already left — DM/auto-timeout below just no-ops then
   }
 
-  if (member) await sendModerationDm(client, member, guild.name, { action: 'warn', reason, moderatorTag: byTag });
+  if (member) await sendModerationDm(client, member, guild, { action: 'warn', reason, moderatorTag: byTag });
 
   if (list.length >= AUTO_TIMEOUT_THRESHOLD && list.length % AUTO_TIMEOUT_THRESHOLD === 0) {
     try {
       if (!member) member = await guild.members.fetch(userId);
       const autoReason = `Auto-timeout: reached ${list.length} warnings`;
       await member.timeout(AUTO_TIMEOUT_MINUTES * 60 * 1000, autoReason);
-      await sendModerationDm(client, member, guild.name, {
+      await sendModerationDm(client, member, guild, {
         action: 'timeout',
         reason: autoReason,
         moderatorTag: 'Auto-Moderation',

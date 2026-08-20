@@ -766,7 +766,8 @@ button {
 .guide-var-row code {
   font-weight: 700;
   color: var(--accent);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .guide-var-row span {

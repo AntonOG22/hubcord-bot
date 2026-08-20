@@ -5,15 +5,25 @@
 // for something informative (e.g. "Opened by X"), the two get combined
 // instead of overwritten.
 //
-// The owner can flip this off entirely from the admin panel (a bot-wide
-// switch, not per-server) — while it's off, brandFooter() falls back to just
-// whatever informative text the embed already had (or no footer at all).
+// Two independent off-switches, both from the admin panel:
+//   - Bot-wide (owner only, botSettings.js) — turns it off everywhere.
+//   - Per-server (any server admin, guildConfig.js) — turns it off just for
+//     that one server's embeds (join/leave messages, tickets, role panels,
+//     giveaways, custom commands, everything that calls this function).
+// Either one being on is enough to hide it. Official announcements/
+// broadcasts are NEVER affected by either switch — they use their own fixed
+// "✅ Verified official message" footer (see dashboard.js's
+// buildOfficialAnnouncementEmbed), which doesn't call this function at all,
+// specifically so it keeps proving a message really came from the real bot
+// even on a server that's turned the regular watermark off.
 const botSettings = require('./botSettings');
+const guildConfig = require('./guildConfig');
 
 const TAGLINE = 'Emerald — emerald-bot-qpsq.onrender.com';
 
-function brandFooter(client, existingText) {
-  if (botSettings.isWatermarkDisabled()) {
+function brandFooter(client, guildId, existingText) {
+  const disabled = botSettings.isWatermarkDisabled() || (guildId && !!guildConfig.getConfig(guildId).watermarkDisabled);
+  if (disabled) {
     return existingText ? { text: existingText } : null;
   }
   return {

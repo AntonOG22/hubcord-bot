@@ -13,6 +13,7 @@ const store = makeGuildStore('guild-config.json', () => ({
   giveawayPingRoleId: null,
   announcementPingRoleId: null,
   levelUpChannelId: null, // if unset, level-up messages post in whichever channel triggered them
+  watermarkDisabled: false, // per-server opt-out of the "Emerald" footer, set from the admin panel. Official announcements/broadcasts are never affected — they use their own fixed "verified official" footer specifically to prove they came from the real bot.
   language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
   disabledFeatures: [], // feature keys turned off for this server — see features.js
 }));

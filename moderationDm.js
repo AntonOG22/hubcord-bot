@@ -21,16 +21,16 @@ const ACTION_INFO = {
   ban: { verb: 'banned', emoji: '🔨', color: 0xed4245 },
 };
 
-async function sendModerationDm(client, target, guildName, { action, reason, moderatorTag, durationText }) {
+async function sendModerationDm(client, target, guild, { action, reason, moderatorTag, durationText }) {
   const info = ACTION_INFO[action];
   if (!info || !target) return;
 
   try {
     const embed = new EmbedBuilder()
       .setColor(info.color)
-      .setTitle(`${info.emoji} You were ${info.verb} in ${guildName}`)
+      .setTitle(`${info.emoji} You were ${info.verb} in ${guild.name}`)
       .setDescription(reason ? `**Reason:** ${reason}` : 'No reason was given.')
-      .setFooter(brandFooter(client))
+      .setFooter(brandFooter(client, guild.id))
       .setTimestamp();
     if (moderatorTag) embed.addFields({ name: 'Moderator', value: moderatorTag, inline: true });
     if (durationText) embed.addFields({ name: 'Duration', value: durationText, inline: true });

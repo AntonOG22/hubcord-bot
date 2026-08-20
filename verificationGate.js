@@ -40,7 +40,7 @@ async function postVerificationMessage(client, channelId) {
     .setTitle(t(guildId, 'verify.embedTitle'))
     .setDescription(t(guildId, 'verify.embedDesc'))
     .setColor(0x57f287)
-    .setFooter(brandFooter(client));
+    .setFooter(brandFooter(client, guildId));
   const button = new ButtonBuilder().setCustomId(BUTTON_ID).setLabel(t(guildId, 'verify.button')).setStyle(ButtonStyle.Success);
   const row = new ActionRowBuilder().addComponents(button);
   await channel.send({ embeds: [embed], components: [row] });

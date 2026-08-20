@@ -46,7 +46,7 @@ function buildTicketName(config, member, number) {
   );
 }
 
-function buildPanelEmbed(panel, client) {
+function buildPanelEmbed(panel, client, guildId) {
   // Always an embed, so "label"(url) masked links work here — see
   // textFormatting.js. §colors never render in embeds, so any typed in by
   // mistake are stripped rather than shown as literal §red text.
@@ -54,7 +54,7 @@ function buildPanelEmbed(panel, client) {
     .setTitle(applyLinkMasking(stripColorCodes(panel.panelTitle)))
     .setDescription(applyLinkMasking(stripColorCodes(panel.panelDescription)))
     .setColor(colorToInt(panel.panelColor))
-    .setFooter(brandFooter(client));
+    .setFooter(brandFooter(client, guildId));
 }
 
 function buildPanelComponents(panel) {
@@ -181,7 +181,7 @@ async function openTicket(interaction, panelId) {
     .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: panel.name }))
     .setDescription(applyLinkMasking(stripColorCodes(config.welcomeMessage.replace('{user}', `${member}`))))
     .setColor(colorToInt(panel.panelColor))
-    .setFooter(brandFooter(interaction.client, t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag })))
+    .setFooter(brandFooter(interaction.client, guild.id, t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag })))
     .setTimestamp();
 
   await channel.send({
@@ -219,7 +219,7 @@ async function performClose(guild, ticket, closedByTag) {
     .setTitle(t(guild.id, 'ticket.closedTitle', { number: ticket.number }))
     .setDescription(t(guild.id, 'ticket.closedDesc', { by: closedByTag, user: ticket.userTag }))
     .setColor(0xff5c4d)
-    .setFooter(brandFooter(guild.client))
+    .setFooter(brandFooter(guild.client, guild.id))
     .setTimestamp();
 
   await channel.send({ embeds: [embed], components: [closedControlsRow(guild.id)] }).catch(() => {});
@@ -251,7 +251,7 @@ async function performReopen(guild, ticket) {
     .setTitle(t(guild.id, 'ticket.reopenedTitle', { number: ticket.number }))
     .setDescription(t(guild.id, 'ticket.reopenedDesc', { userMention: `<@${ticket.userId}>` }))
     .setColor(0x3ddc84)
-    .setFooter(brandFooter(guild.client))
+    .setFooter(brandFooter(guild.client, guild.id))
     .setTimestamp();
 
   await channel.send({ content: `<@${ticket.userId}>`, embeds: [embed], components: [openControlsRow(guild.id)] }).catch(() => {});
@@ -472,7 +472,7 @@ async function postPanel(client, guildId, panelId, channelId) {
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) throw new Error('Panel not found.');
   const channel = await client.channels.fetch(channelId);
-  await channel.send({ embeds: [buildPanelEmbed(panel, client)], components: buildPanelComponents(panel) });
+  await channel.send({ embeds: [buildPanelEmbed(panel, client, guildId)], components: buildPanelComponents(panel) });
 }
 
 function listTickets(guildId, status) {

@@ -97,7 +97,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
-    await sendModerationDm(message.client, member, message.guild.name, { action: 'ban', reason, moderatorTag: message.author.tag });
+    await sendModerationDm(message.client, member, message.guild, { action: 'ban', reason, moderatorTag: message.author.tag });
     await member.ban({ reason });
     return `🔨 Banned **${member.user.tag}** (${reason})`;
   },
@@ -137,7 +137,7 @@ cmd({
     if (!minutes || minutes <= 0) throw new Error('Provide a number of minutes.');
     const reason = args.slice(2).join(' ') || 'No reason given';
     await member.timeout(minutes * 60 * 1000, reason);
-    await sendModerationDm(message.client, member, message.guild.name, { action: 'timeout', reason, moderatorTag: message.author.tag, durationText: `${minutes} minutes` });
+    await sendModerationDm(message.client, member, message.guild, { action: 'timeout', reason, moderatorTag: message.author.tag, durationText: `${minutes} minutes` });
     return `⏱️ Timed out **${member.user.tag}** for ${minutes}m (${reason})`;
   },
 });
@@ -574,7 +574,7 @@ cmd({
     const xpList = xpSystem.getLeaderboard(message.guild.id, 5);
     const activeList = stats.getMostActive(message.guild.id, 5);
 
-    const embed = new EmbedBuilder().setTitle('🏆 Leaderboards').setColor(0x3fe8d6).setFooter(brandFooter(message.client));
+    const embed = new EmbedBuilder().setTitle('🏆 Leaderboards').setColor(0x3fe8d6).setFooter(brandFooter(message.client, message.guild.id));
 
     embed.addFields({
       name: '⭐ Top XP',
@@ -605,7 +605,7 @@ cmd({
       .setTitle('📖 Member Commands')
       .setDescription(`Prefix: \`${prefix}\``)
       .setColor(0x3fe8d6)
-      .setFooter(brandFooter(message.client));
+      .setFooter(brandFooter(message.client, message.guild.id));
 
     for (const [category, cmds] of Object.entries(byCategory)) {
       const value = cmds.map((c) => `\`${prefix}${c.name}\` — ${c.description}`).join('\n').slice(0, 1024);
@@ -722,7 +722,7 @@ cmd({
     if (!config.announcementsChannelId) throw new Error('No announcements channel set for this server (see the dashboard Server tab).');
 
     const channel = await message.client.channels.fetch(config.announcementsChannelId);
-    const embed = new EmbedBuilder().setTitle(title).setDescription(text).setColor(0x3ddc84).setFooter(brandFooter(message.client)).setTimestamp();
+    const embed = new EmbedBuilder().setTitle(title).setDescription(text).setColor(0x3ddc84).setFooter(brandFooter(message.client, message.guild.id)).setTimestamp();
     const pingContent = config.announcementPingRoleId ? `<@&${config.announcementPingRoleId}>` : '';
 
     await channel.send({
@@ -756,7 +756,7 @@ cmd({
     if (parts.length < 3) throw new Error('Format: question | option1 | option2 | ...');
     const [question, ...options] = parts;
     const numberEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-    const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(options.map((o, i) => `${numberEmoji[i]} ${o}`).join('\n\n')).setColor(0x5865f2).setFooter(brandFooter(message.client));
+    const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(options.map((o, i) => `${numberEmoji[i]} ${o}`).join('\n\n')).setColor(0x5865f2).setFooter(brandFooter(message.client, message.guild.id));
     const msg = await message.channel.send({ embeds: [embed] });
     for (let i = 0; i < options.length; i++) await msg.react(numberEmoji[i]);
     return null;
@@ -769,7 +769,7 @@ cmd({
   run: async (message, args) => {
     const [title, description] = args.join(' ').split('|').map((s) => s.trim());
     if (!title || !description) throw new Error('Format: title | description');
-    const embed = new EmbedBuilder().setTitle(title).setDescription(description).setColor(0x5865f2).setFooter(brandFooter(message.client));
+    const embed = new EmbedBuilder().setTitle(title).setDescription(description).setColor(0x5865f2).setFooter(brandFooter(message.client, message.guild.id));
     await message.channel.send({ embeds: [embed] });
     return null;
   },
@@ -842,7 +842,7 @@ cmd({
     const announcementsChannelId = guildConfig.getConfig(message.guild.id).announcementsChannelId;
     if (!announcementsChannelId) throw new Error('No announcements channel set for this server (see the dashboard Server tab).');
     const channel = await message.client.channels.fetch(announcementsChannelId);
-    const embed = new EmbedBuilder().setTitle(t.title).setDescription(t.description).setColor(t.color).setFooter(brandFooter(message.client));
+    const embed = new EmbedBuilder().setTitle(t.title).setDescription(t.description).setColor(t.color).setFooter(brandFooter(message.client, message.guild.id));
     await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
     return '📢 Template posted';
   },

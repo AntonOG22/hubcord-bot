@@ -178,11 +178,11 @@ async function applyPunishment(guild, message, config, reasonLabel) {
       await warnings.addWarning(clientRef, guild, message.author.id, reasonLabel, 'Auto-Moderation');
     } else if (punishment === 'timeout' && message.member) {
       await message.member.timeout((config.timeoutMinutes || 10) * 60 * 1000, reasonLabel);
-      await sendModerationDm(clientRef, message.member, guild.name, { action: 'timeout', reason: reasonLabel, moderatorTag: 'Auto-Moderation', durationText: `${config.timeoutMinutes || 10} minutes` });
+      await sendModerationDm(clientRef, message.member, guild, { action: 'timeout', reason: reasonLabel, moderatorTag: 'Auto-Moderation', durationText: `${config.timeoutMinutes || 10} minutes` });
     } else if (punishment === 'kick' && message.member) {
       await message.member.kick(reasonLabel);
     } else if (punishment === 'ban' && message.member) {
-      await sendModerationDm(clientRef, message.member, guild.name, { action: 'ban', reason: reasonLabel, moderatorTag: 'Auto-Moderation' });
+      await sendModerationDm(clientRef, message.member, guild, { action: 'ban', reason: reasonLabel, moderatorTag: 'Auto-Moderation' });
       await message.member.ban({ reason: reasonLabel });
     }
   } catch (err) {

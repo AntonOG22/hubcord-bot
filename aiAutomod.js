@@ -194,12 +194,12 @@ async function handleMessage(client, message) {
     } else if (action === 'timeout') {
       botActionRegistry.markAutomated(guildId, message.author.id, 'timeout');
       await message.member.timeout(10 * 60 * 1000, reasonLabel);
-      await sendModerationDm(client, message.member, message.guild.name, { action: 'timeout', reason: reasonLabel, moderatorTag: 'AI Automod', durationText: '10 minutes' });
+      await sendModerationDm(client, message.member, message.guild, { action: 'timeout', reason: reasonLabel, moderatorTag: 'AI Automod', durationText: '10 minutes' });
     } else if (action === 'kick') {
       await message.member.kick(reasonLabel);
     } else if (action === 'ban') {
       botActionRegistry.markAutomated(guildId, message.author.id, 'ban');
-      await sendModerationDm(client, message.member, message.guild.name, { action: 'ban', reason: reasonLabel, moderatorTag: 'AI Automod' });
+      await sendModerationDm(client, message.member, message.guild, { action: 'ban', reason: reasonLabel, moderatorTag: 'AI Automod' });
       await message.member.ban({ reason: reasonLabel });
     }
   } catch (err) {
@@ -216,7 +216,7 @@ async function handleMessage(client, message) {
         .setColor(0x9b59b6)
         .setTitle('🤖 AI Automod Action')
         .setDescription(`**User:** ${message.author}\n**Channel:** ${message.channel}\n**Severity:** ${result.severity}\n**Action:** ${action}\n**Reason:** ${result.reason}`)
-        .setFooter(brandFooter(client))
+        .setFooter(brandFooter(client, guildId))
         .setTimestamp();
       await channel.send({ embeds: [embed] });
     } catch (err) {

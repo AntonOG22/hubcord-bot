@@ -150,7 +150,7 @@ async function pollTwitch(entriesByGuild) {
     return;
   }
 
-  for (const { entry } of twitchEntries) {
+  for (const { guildId, entry } of twitchEntries) {
     const stream = liveMap.get(entry.identifier.toLowerCase());
     entry.state = entry.state || {};
 
@@ -166,7 +166,7 @@ async function pollTwitch(entriesByGuild) {
           .setTitle(`🔴 ${stream.user_name} is now live on Twitch!`)
           .setURL(`https://twitch.tv/${entry.identifier}`)
           .setDescription(stream.title + (stream.game_name ? `\n\nPlaying **${stream.game_name}**` : ''))
-          .setFooter(brandFooter(clientRef, 'Live on Twitch'))
+          .setFooter(brandFooter(clientRef, guildId, 'Live on Twitch'))
           .setTimestamp();
         const thumb = (stream.thumbnail_url || '').replace('{width}', '640').replace('{height}', '360');
         if (thumb) embed.setImage(thumb);
@@ -193,7 +193,7 @@ async function pollYoutube(entriesByGuild) {
     }
   }
 
-  for (const { entry } of youtubeEntries) {
+  for (const { guildId, entry } of youtubeEntries) {
     const video = videoByChannel.get(entry.identifier);
     if (!video) continue;
     entry.state = entry.state || {};
@@ -223,7 +223,7 @@ async function pollYoutube(entriesByGuild) {
       .setTitle(`📺 New video from ${video.channelName}`)
       .setURL(video.url)
       .setDescription(video.title)
-      .setFooter(brandFooter(clientRef, 'New on YouTube'))
+      .setFooter(brandFooter(clientRef, guildId, 'New on YouTube'))
       .setTimestamp();
     if (video.thumbnail) embed.setImage(video.thumbnail);
     await notify(entry, embed);
