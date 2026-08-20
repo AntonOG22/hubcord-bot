@@ -43,6 +43,7 @@ const joinLeaveMessages = require('./joinLeaveMessages');
 const imageUpload = require('./imageUpload');
 const streamAlerts = require('./streamAlerts');
 const aiAutomod = require('./aiAutomod');
+const { sendModerationDm } = require('./moderationDm');
 
 const PERMISSION_NAMES = Object.fromEntries(
   Object.entries(PermissionFlagsBits).map(([name, bit]) => [bit.toString(), name])
@@ -730,6 +731,10 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     try {
       const user = await client.users.fetch(userId);
+      // Sent before the ban, not after — once banned, the bot and this user
+      // very likely no longer share a server, and Discord won't reliably
+      // deliver a DM at that point.
+      await sendModerationDm(client, user, req.guild.name, { action: 'ban', reason, moderatorTag: req.session.username });
       await req.guild.members.ban(userId, {
         reason: reason || 'No reason given',
         deleteMessageSeconds: (parseInt(deleteMessageDays, 10) || 0) * 86400,
@@ -769,6 +774,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     try {
       const member = await req.guild.members.fetch(userId);
       await member.timeout(parseInt(minutes, 10) * 60 * 1000, reason || 'No reason given');
+      await sendModerationDm(client, member, req.guild.name, { action: 'timeout', reason, moderatorTag: req.session.username, durationText: `${minutes} minutes` });
       audit(req.guildId, 'Timed out member', `${member.user.tag} for ${minutes}m (${reason || 'no reason'})`);
       res.json({ ok: true });
     } catch (err) {

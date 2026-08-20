@@ -27,6 +27,7 @@ const guildConfig = require('./guildConfig');
 const features = require('./features');
 const warnings = require('./warnings');
 const automod = require('./automod');
+const { sendModerationDm } = require('./moderationDm');
 const { brandFooter } = require('./brand');
 
 const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
@@ -191,9 +192,11 @@ async function handleMessage(client, message) {
       await warnings.addWarning(client, message.guild, message.author.id, reasonLabel, 'AI Automod');
     } else if (action === 'timeout') {
       await message.member.timeout(10 * 60 * 1000, reasonLabel);
+      await sendModerationDm(client, message.member, message.guild.name, { action: 'timeout', reason: reasonLabel, moderatorTag: 'AI Automod', durationText: '10 minutes' });
     } else if (action === 'kick') {
       await message.member.kick(reasonLabel);
     } else if (action === 'ban') {
+      await sendModerationDm(client, message.member, message.guild.name, { action: 'ban', reason: reasonLabel, moderatorTag: 'AI Automod' });
       await message.member.ban({ reason: reasonLabel });
     }
   } catch (err) {

@@ -7,6 +7,7 @@
 // message on failure — commandHandler.js takes care of sending the reply either way.
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
+const { sendModerationDm } = require('./moderationDm');
 
 const warnings = require('./warnings');
 const xpSystem = require('./xpSystem');
@@ -96,6 +97,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
+    await sendModerationDm(message.client, member, message.guild.name, { action: 'ban', reason, moderatorTag: message.author.tag });
     await member.ban({ reason });
     return `🔨 Banned **${member.user.tag}** (${reason})`;
   },
@@ -135,6 +137,7 @@ cmd({
     if (!minutes || minutes <= 0) throw new Error('Provide a number of minutes.');
     const reason = args.slice(2).join(' ') || 'No reason given';
     await member.timeout(minutes * 60 * 1000, reason);
+    await sendModerationDm(message.client, member, message.guild.name, { action: 'timeout', reason, moderatorTag: message.author.tag, durationText: `${minutes} minutes` });
     return `⏱️ Timed out **${member.user.tag}** for ${minutes}m (${reason})`;
   },
 });
