@@ -783,10 +783,6 @@ function init() {
   populateChannelSelect(document.getElementById('fun-channel'));
   populateChannelSelect(document.getElementById('rr-channel'));
   populateChannelSelect(document.getElementById('verification-channel'));
-  Promise.all([
-    populateRoleSelect(document.getElementById('automod-ignore-roles')),
-    populateChannelSelect(document.getElementById('automod-ignore-channels')),
-  ]).then(refreshAutomod);
   populateRoleSelect(document.getElementById('rr-role'));
   Promise.all([
     populateChannelSelect(document.getElementById('settings-counting-channel'), { withNone: true }),
@@ -1814,13 +1810,39 @@ const AUTOMOD_LABELS = {
   attachmentBlocklistEnabled: 'Block disallowed file attachments (list below)',
 };
 
-function setMultiSelectValues(selectEl, values) {
-  const set = new Set(values || []);
-  [...selectEl.options].forEach((opt) => { opt.selected = set.has(opt.value); });
+// Checkbox lists for "pick any number of these" settings — much clearer
+// than a native <select multiple>, which needs an undiscoverable ctrl/cmd-
+// click gesture to select more than one item.
+async function renderCheckboxList(containerId, apiPath, selectedIds, labelFn) {
+  const container = document.getElementById(containerId);
+  const res = await api(apiPath);
+  if (!res.ok) return;
+  const items = await res.json();
+  const selected = new Set(selectedIds || []);
+
+  if (items.length === 0) {
+    container.innerHTML = '<span class="empty-hint">Nothing here yet.</span>';
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+      <div class="toggle-row">
+        <span class="toggle-label">${escapeHtml(labelFn(item))}</span>
+        <label class="toggle-switch">
+          <input type="checkbox" data-checkbox-id="${escapeHtml(item.id)}" ${selected.has(item.id) ? 'checked' : ''} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`
+    )
+    .join('');
 }
 
-function getMultiSelectValues(selectEl) {
-  return [...selectEl.selectedOptions].map((opt) => opt.value);
+function getCheckedIds(containerId) {
+  return [...document.querySelectorAll(`#${containerId} [data-checkbox-id]`)]
+    .filter((input) => input.checked)
+    .map((input) => input.dataset.checkboxId);
 }
 
 async function refreshAutomod() {
@@ -1860,8 +1882,8 @@ async function refreshAutomod() {
   document.getElementById('automod-raid-slowmode-seconds').value = config.raidSlowmodeSeconds || 10;
   document.getElementById('automod-raid-duration').value = config.raidSlowmodeDurationMinutes || 5;
 
-  setMultiSelectValues(document.getElementById('automod-ignore-roles'), config.ignoreRoleIds);
-  setMultiSelectValues(document.getElementById('automod-ignore-channels'), config.ignoreChannelIds);
+  renderCheckboxList('automod-ignore-roles', '/api/roles', config.ignoreRoleIds, (r) => r.name);
+  renderCheckboxList('automod-ignore-channels', '/api/channels', config.ignoreChannelIds, (c) => (c.parent ? `${c.parent} / ${c.name}` : c.name));
 }
 
 async function saveAutomod() {
@@ -1886,8 +1908,8 @@ async function saveAutomod() {
   patch.raidSlowmodeWindowSeconds = parseInt(document.getElementById('automod-raid-window').value, 10) || 30;
   patch.raidSlowmodeSeconds = parseInt(document.getElementById('automod-raid-slowmode-seconds').value, 10) || 10;
   patch.raidSlowmodeDurationMinutes = parseInt(document.getElementById('automod-raid-duration').value, 10) || 5;
-  patch.ignoreRoleIds = getMultiSelectValues(document.getElementById('automod-ignore-roles'));
-  patch.ignoreChannelIds = getMultiSelectValues(document.getElementById('automod-ignore-channels'));
+  patch.ignoreRoleIds = getCheckedIds('automod-ignore-roles');
+  patch.ignoreChannelIds = getCheckedIds('automod-ignore-channels');
 
   const res = await api('/api/automod', { method: 'POST', body: JSON.stringify(patch) });
   if (res.ok) {

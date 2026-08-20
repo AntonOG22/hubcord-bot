@@ -471,10 +471,10 @@
               </div>
             </div>
 
-            <label class="field-label" for="automod-ignore-roles">Ignore list — roles <span class="muted small">(exempt from every filter above, ctrl/cmd-click to select multiple)</span></label>
-            <select id="automod-ignore-roles" multiple size="4"></select>
-            <label class="field-label" for="automod-ignore-channels">Ignore list — channels</label>
-            <select id="automod-ignore-channels" multiple size="4"></select>
+            <label class="field-label">Ignore list — roles <span class="muted small">(exempt from every filter above — tick any that should be immune)</span></label>
+            <div id="automod-ignore-roles" class="toggle-list scroll-list"></div>
+            <label class="field-label">Ignore list — channels</label>
+            <div id="automod-ignore-channels" class="toggle-list scroll-list"></div>
 
             <button id="automod-save-btn" class="primary-button">Save Settings</button>
             <p id="automod-feedback" class="feedback-text"></p>
