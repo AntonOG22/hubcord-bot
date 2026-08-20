@@ -1570,15 +1570,33 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     res.json(config);
   });
 
+  // Shared by both panel routes below — tickets.js also clamps/sanitizes
+  // server-side regardless, this just gives a clear error instead of
+  // silently dropping a bad category reference.
+  function validateMenuOptions(req, menuOptions) {
+    if (menuOptions === undefined) return null;
+    if (!Array.isArray(menuOptions)) return 'menuOptions must be a list';
+    if (menuOptions.length > tickets.MAX_MENU_OPTIONS) return `You can set at most ${tickets.MAX_MENU_OPTIONS} menu options.`;
+    for (const o of menuOptions) {
+      if (!o || !String(o.label || '').trim()) return 'Every menu option needs a label.';
+      if (o.categoryChannelId && !req.guild.channels.cache.has(o.categoryChannelId)) return 'One of the menu options has a category that\'s not in this server.';
+    }
+    return null;
+  }
+
   app.post('/api/tickets/panels', requireGuildAccess, (req, res) => {
     const panel = req.body || {};
     if (!panel.name) return res.status(400).json({ error: 'name is required' });
+    const menuError = validateMenuOptions(req, panel.menuOptions);
+    if (menuError) return res.status(400).json({ error: menuError });
     const panels = tickets.addPanel(req.guildId, panel);
     audit(req.guildId, 'Added ticket panel', panel.name);
     res.json(panels);
   });
 
   app.post('/api/tickets/panels/:id', requireGuildAccess, (req, res) => {
+    const menuError = validateMenuOptions(req, (req.body || {}).menuOptions);
+    if (menuError) return res.status(400).json({ error: menuError });
     try {
       const panels = tickets.updatePanel(req.guildId, req.params.id, req.body || {});
       audit(req.guildId, 'Updated ticket panel', req.params.id);

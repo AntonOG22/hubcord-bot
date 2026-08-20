@@ -693,8 +693,21 @@
             <input id="ticket-panel-color" type="color" value="#3fe8d6" />
             <label class="field-label" for="ticket-panel-category">Ticket category (where channels are created)</label>
             <select id="ticket-panel-category"><option value="">— none —</option></select>
-            <button id="ticket-panel-add-btn" class="primary-button">Add Panel</button>
+
+            <label class="field-label">Menu options <span class="muted small">(optional, up to 5 — turns the panel into a dropdown to pick a ticket type, e.g. "Support" vs "Bug Report", instead of one plain button)</span></label>
+            <div id="ticket-panel-menu-options"></div>
+
+            <button id="ticket-panel-add-btn" class="primary-button" style="margin-top:14px">Add Panel</button>
             <p id="ticket-panel-add-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide hidden" id="ticket-panel-menu-editor-card">
+            <h2>Edit Menu Options — <span id="ticket-panel-menu-editor-name"></span></h2>
+            <p class="muted small">Same idea as above: up to 5 options, each its own emoji/label/description and optionally its own category. Leaving a panel with zero options here switches it back to a single plain button.</p>
+            <div id="ticket-panel-menu-editor"></div>
+            <button id="ticket-panel-menu-editor-save" class="primary-button" style="margin-top:14px">Save Menu Options</button>
+            <button id="ticket-panel-menu-editor-cancel" class="secondary-button">Cancel</button>
+            <p id="ticket-panel-menu-editor-feedback" class="feedback-text"></p>
           </section>
 
           <section class="card wide">

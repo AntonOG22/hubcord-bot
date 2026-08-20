@@ -8,6 +8,7 @@
 // category, where staff can permanently delete it, pull a transcript, or reopen it.
 const {
   ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits,
+  StringSelectMenuBuilder,
 } = require('discord.js');
 const { makeGuildStore, safeAssign } = require('./guildStore');
 const { t } = require('./i18n');
@@ -15,6 +16,12 @@ const { brandFooter } = require('./brand');
 const { stripColorCodes, applyLinkMasking } = require('./textFormatting');
 
 const MAX_SUPPORT_ROLES = 3;
+// A panel with menuOptions set posts a dropdown (like Discord's own "select
+// a ticket type" pattern) instead of a single button — each option is its
+// own mini ticket type (own emoji/label/description, optionally its own
+// category), letting one panel offer e.g. "Support" vs "Bug Report" without
+// needing a separate panel/channel for each.
+const MAX_MENU_OPTIONS = 5;
 
 const configStore = makeGuildStore('ticket-config.json', () => ({
   supportRoleIds: [], // up to MAX_SUPPORT_ROLES roles, all pinged + given access on a new ticket
@@ -58,6 +65,21 @@ function buildPanelEmbed(panel, client, guildId) {
 }
 
 function buildPanelComponents(panel) {
+  if (panel.menuOptions && panel.menuOptions.length > 0) {
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`ticket-menu:${panel.id}`)
+      .setPlaceholder('Select!')
+      .addOptions(
+        panel.menuOptions.map((o) => ({
+          value: o.id,
+          label: o.label.slice(0, 100),
+          description: o.description ? o.description.slice(0, 100) : undefined,
+          emoji: o.emoji || undefined,
+        }))
+      );
+    return [new ActionRowBuilder().addComponents(menu)];
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`ticket-open:${panel.id}`).setLabel(panel.buttonLabel).setEmoji(panel.buttonEmoji || '🎫').setStyle(ButtonStyle.Primary)
   );
@@ -117,7 +139,7 @@ async function generateTranscript(channel) {
 
 // ---------- Ticket lifecycle ----------
 
-async function openTicket(interaction, panelId) {
+async function openTicket(interaction, panelId, optionId) {
   const guild = interaction.guild;
   const config = configStore.get(guild.id);
   const state = stateStore.get(guild.id);
@@ -127,6 +149,17 @@ async function openTicket(interaction, panelId) {
   if (!panel) {
     return interaction.reply({ content: t(guild.id, 'ticket.panelGone'), ephemeral: true });
   }
+
+  // A menu-style panel — the selected option can override which category the
+  // ticket channel lands in; everything else (support roles, welcome
+  // message, close/reopen flow) is shared with every other ticket on this
+  // panel, same as a button-style panel.
+  const option = optionId ? panel.menuOptions?.find((o) => o.id === optionId) : null;
+  if (optionId && !option) {
+    return interaction.reply({ content: t(guild.id, 'ticket.panelGone'), ephemeral: true });
+  }
+  const displayName = option ? `${panel.name} — ${option.label}` : panel.name;
+  const categoryChannelId = option?.categoryChannelId || panel.categoryChannelId || null;
 
   const openCount = state.tickets.filter((tk) => tk.userId === member.id && tk.status === 'open').length;
   if (openCount >= config.maxOpenPerUser) {
@@ -150,9 +183,9 @@ async function openTicket(interaction, panelId) {
     channel = await guild.channels.create({
       name,
       type: ChannelType.GuildText,
-      parent: panel.categoryChannelId || undefined,
+      parent: categoryChannelId || undefined,
       permissionOverwrites: overwrites,
-      topic: `Ticket for ${member.user.tag} — ${panel.name}`,
+      topic: `Ticket for ${member.user.tag} — ${displayName}`,
     });
   } catch (err) {
     return interaction.reply({ content: t(guild.id, 'ticket.createFailed', { error: err.message }), ephemeral: true });
@@ -165,8 +198,9 @@ async function openTicket(interaction, panelId) {
     userId: member.id,
     userTag: member.user.tag,
     panelId: panel.id,
-    panelName: panel.name,
-    originalCategoryId: panel.categoryChannelId || null,
+    panelName: displayName,
+    optionId: option?.id || null,
+    originalCategoryId: categoryChannelId,
     status: 'open',
     createdAt: new Date().toISOString(),
     closedAt: null,
@@ -178,8 +212,8 @@ async function openTicket(interaction, panelId) {
   stateStore.save();
 
   const embed = new EmbedBuilder()
-    .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: panel.name }))
-    .setDescription(applyLinkMasking(stripColorCodes(config.welcomeMessage.replace('{user}', `${member}`))))
+    .setTitle(t(guild.id, 'ticket.embedTitle', { number, panel: displayName }))
+    .setDescription(applyLinkMasking(stripColorCodes((option?.description ? `${option.description}\n\n` : '') + config.welcomeMessage.replace('{user}', `${member}`))))
     .setColor(colorToInt(panel.panelColor))
     .setFooter(brandFooter(interaction.client, guild.id, t(guild.id, 'ticket.footerOpenedBy', { tag: member.user.tag })))
     .setTimestamp();
@@ -306,8 +340,21 @@ function setupTickets(client) {
   clientRef = client;
 
   client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton() || !interaction.guild) return;
+    if (!interaction.guild || (!interaction.isButton() && !interaction.isStringSelectMenu())) return;
     const guild = interaction.guild;
+
+    if (interaction.isStringSelectMenu()) {
+      if (!interaction.customId.startsWith('ticket-menu:')) return;
+      try {
+        const panelId = interaction.customId.split(':')[1];
+        const optionId = interaction.values[0];
+        await openTicket(interaction, panelId, optionId);
+      } catch (err) {
+        console.error('Ticket menu interaction failed:', err.message);
+        await interaction.reply({ content: t(guild.id, 'ticket.error', { message: err.message }), ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
 
     try {
       if (interaction.customId.startsWith('ticket-open:')) {
@@ -434,6 +481,24 @@ function updateConfig(guildId, patch) {
   return config;
 }
 
+// Server-side clamp/sanitize regardless of what the dashboard already
+// validates client-side — never trust the request body alone for something
+// that gets rendered straight into a Discord select menu (label/description
+// length limits, a hard cap on how many options exist).
+function sanitizeMenuOptions(rawOptions) {
+  if (!Array.isArray(rawOptions)) return [];
+  return rawOptions
+    .filter((o) => o && typeof o.label === 'string' && o.label.trim())
+    .slice(0, MAX_MENU_OPTIONS)
+    .map((o, i) => ({
+      id: o.id || `${Date.now().toString(36)}-${i}`,
+      emoji: (o.emoji || '').slice(0, 8) || null,
+      label: o.label.trim().slice(0, 100),
+      description: (o.description || '').trim().slice(0, 100) || null,
+      categoryChannelId: o.categoryChannelId || null,
+    }));
+}
+
 function addPanel(guildId, panel) {
   const config = configStore.get(guildId);
   const id = Date.now().toString(36);
@@ -446,6 +511,7 @@ function addPanel(guildId, panel) {
     panelDescription: panel.panelDescription || 'Click the button below to open a private ticket with our staff.',
     panelColor: panel.panelColor || '#3fe8d6',
     categoryChannelId: panel.categoryChannelId || null,
+    menuOptions: sanitizeMenuOptions(panel.menuOptions),
   });
   configStore.save();
   return config.panels;
@@ -455,6 +521,7 @@ function updatePanel(guildId, panelId, patch) {
   const config = configStore.get(guildId);
   const panel = config.panels.find((p) => p.id === panelId);
   if (!panel) throw new Error('Panel not found.');
+  if (patch.menuOptions !== undefined) patch = { ...patch, menuOptions: sanitizeMenuOptions(patch.menuOptions) };
   safeAssign(panel, patch);
   configStore.save();
   return config.panels;
@@ -499,6 +566,7 @@ function getStats(guildId) {
 
 module.exports = {
   MAX_SUPPORT_ROLES,
+  MAX_MENU_OPTIONS,
   setupTickets,
   getConfig,
   updateConfig,

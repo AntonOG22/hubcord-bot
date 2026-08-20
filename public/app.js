@@ -1065,6 +1065,7 @@ function init() {
     populateRoleSelect(document.getElementById('ticket-support-role-2'), { withNone: true }),
     populateRoleSelect(document.getElementById('ticket-support-role-3'), { withNone: true }),
   ]).then(refreshTicketConfig);
+  createMenuOptionsEditor(document.getElementById('ticket-panel-menu-options'), []).then((editor) => { newPanelMenuEditor = editor; });
 
   refreshEverything();
 
@@ -1113,6 +1114,8 @@ function init() {
   document.getElementById('joinleave-save-btn').addEventListener('click', saveJoinLeaveConfig);
   document.getElementById('ticket-config-save-btn').addEventListener('click', saveTicketConfig);
   document.getElementById('ticket-panel-add-btn').addEventListener('click', addTicketPanel);
+  document.getElementById('ticket-panel-menu-editor-save').addEventListener('click', saveMenuOptionsEditor);
+  document.getElementById('ticket-panel-menu-editor-cancel').addEventListener('click', cancelMenuOptionsEditor);
   document.getElementById('ticket-post-btn').addEventListener('click', postTicketPanel);
   document.getElementById('rate-command-add-btn').addEventListener('click', addRateCommand);
   document.getElementById('customcmd-add-btn').addEventListener('click', addCustomCommand);
@@ -2788,6 +2791,69 @@ document.getElementById('levelup-channel-save-btn').addEventListener('click', as
 
 let ticketPanelsCache = [];
 
+// ---------- Ticket panel menu options editor ----------
+//
+// Shared by the "New panel" form (always mounted, starts empty) and the
+// "Edit Menu Options" card (mounted fresh with a specific panel's current
+// options whenever "Edit Menu" is clicked). Up to 5 rows, each its own
+// emoji/label/description/category, all client-side state until Save/Add
+// Panel actually posts it — the server re-validates and clamps to 5
+// regardless (see dashboard.js/tickets.js), this is just the UI.
+let ticketCategoriesCache = null;
+
+async function getTicketCategories() {
+  if (ticketCategoriesCache) return ticketCategoriesCache;
+  const res = await api('/api/categories');
+  ticketCategoriesCache = res.ok ? await res.json() : [];
+  return ticketCategoriesCache;
+}
+
+async function createMenuOptionsEditor(containerEl, initialOptions) {
+  const categories = await getTicketCategories();
+  let options = (initialOptions || []).map((o) => ({ ...o }));
+
+  function render() {
+    const rows = options
+      .map(
+        (o, i) => `
+      <div class="row menu-option-row" data-index="${i}">
+        <input type="text" class="menu-opt-emoji" placeholder="🎫" maxlength="8" value="${escapeHtml(o.emoji || '')}" style="max-width:60px" />
+        <input type="text" class="menu-opt-label" placeholder="Label, e.g. Bug Report" maxlength="100" value="${escapeHtml(o.label || '')}" />
+        <input type="text" class="menu-opt-desc" placeholder="Description (optional)" maxlength="100" value="${escapeHtml(o.description || '')}" />
+        <select class="menu-opt-category">
+          <option value="">— use panel's category —</option>
+          ${categories.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === o.categoryChannelId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+        <button type="button" class="danger-button menu-opt-remove">×</button>
+      </div>`
+      )
+      .join('');
+    const addBtn = options.length < 5 ? `<button type="button" class="secondary-button menu-opt-add">+ Add Option</button>` : `<p class="muted small">Max 5 options.</p>`;
+    containerEl.innerHTML = rows + addBtn;
+
+    containerEl.querySelectorAll('.menu-option-row').forEach((rowEl) => {
+      const idx = parseInt(rowEl.dataset.index, 10);
+      rowEl.querySelector('.menu-opt-emoji').addEventListener('input', (e) => { options[idx].emoji = e.target.value; });
+      rowEl.querySelector('.menu-opt-label').addEventListener('input', (e) => { options[idx].label = e.target.value; });
+      rowEl.querySelector('.menu-opt-desc').addEventListener('input', (e) => { options[idx].description = e.target.value; });
+      rowEl.querySelector('.menu-opt-category').addEventListener('change', (e) => { options[idx].categoryChannelId = e.target.value || null; });
+      rowEl.querySelector('.menu-opt-remove').addEventListener('click', () => { options.splice(idx, 1); render(); });
+    });
+    const addBtnEl = containerEl.querySelector('.menu-opt-add');
+    if (addBtnEl) addBtnEl.addEventListener('click', () => { options.push({ emoji: '', label: '', description: '', categoryChannelId: null }); render(); });
+  }
+
+  render();
+  return {
+    getOptions: () => options.filter((o) => o.label && o.label.trim()).map((o) => ({ ...o, label: o.label.trim() })),
+    reset: () => { options = []; render(); },
+  };
+}
+
+let newPanelMenuEditor = null;
+let editPanelMenuEditor = null;
+let editingPanelId = null;
+
 async function refreshTicketConfig() {
   const res = await api('/api/tickets/config');
   if (!res.ok) return;
@@ -2821,8 +2887,10 @@ function renderTicketPanels() {
       <div class="list-main">
         <div class="list-title">${escapeHtml(p.buttonEmoji || '🎫')} ${escapeHtml(p.name)} <span class="muted small">→ ${escapeHtml(p.buttonLabel)}</span></div>
         <div class="list-sub">Category: ${p.categoryChannelId ? escapeHtml(p.categoryChannelId) : 'none set'}</div>
+        <div class="list-sub muted small">${p.menuOptions && p.menuOptions.length ? `🔽 ${p.menuOptions.length} menu option${p.menuOptions.length === 1 ? '' : 's'}` : 'Single button (no menu options)'}</div>
       </div>
       <div class="list-actions">
+        <button class="secondary-button" data-panel-edit-menu="${p.id}">Edit Menu</button>
         <button class="danger-button" data-panel-remove="${p.id}">Remove</button>
       </div>
     </div>`
@@ -2832,6 +2900,43 @@ function renderTicketPanels() {
   document.querySelectorAll('[data-panel-remove]').forEach((btn) => {
     btn.addEventListener('click', () => removeTicketPanel(btn.dataset.panelRemove));
   });
+  document.querySelectorAll('[data-panel-edit-menu]').forEach((btn) => {
+    btn.addEventListener('click', () => openMenuOptionsEditor(btn.dataset.panelEditMenu));
+  });
+}
+
+async function openMenuOptionsEditor(panelId) {
+  const panel = ticketPanelsCache.find((p) => p.id === panelId);
+  if (!panel) return;
+  editingPanelId = panelId;
+  document.getElementById('ticket-panel-menu-editor-name').textContent = panel.name;
+  document.getElementById('ticket-panel-menu-editor-card').classList.remove('hidden');
+  editPanelMenuEditor = await createMenuOptionsEditor(document.getElementById('ticket-panel-menu-editor'), panel.menuOptions || []);
+  document.getElementById('ticket-panel-menu-editor-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function saveMenuOptionsEditor() {
+  const feedback = document.getElementById('ticket-panel-menu-editor-feedback');
+  if (!editingPanelId || !editPanelMenuEditor) return;
+  const res = await api(`/api/tickets/panels/${editingPanelId}`, {
+    method: 'POST',
+    body: JSON.stringify({ menuOptions: editPanelMenuEditor.getOptions() }),
+  });
+  if (res.ok) {
+    setFeedback(feedback, 'Menu options saved!', true);
+    refreshTicketConfig();
+    refreshAuditLog();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
+  }
+}
+
+function cancelMenuOptionsEditor() {
+  editingPanelId = null;
+  editPanelMenuEditor = null;
+  document.getElementById('ticket-panel-menu-editor-card').classList.add('hidden');
+  document.getElementById('ticket-panel-menu-editor-feedback').textContent = '';
 }
 
 function renderTicketPanelSelect() {
@@ -2852,6 +2957,7 @@ async function addTicketPanel() {
     panelDescription: document.getElementById('ticket-panel-description').value.trim() || 'Click the button below to open a private ticket with our staff.',
     panelColor: document.getElementById('ticket-panel-color').value || '#3fe8d6',
     categoryChannelId: document.getElementById('ticket-panel-category').value || null,
+    menuOptions: newPanelMenuEditor ? newPanelMenuEditor.getOptions() : [],
   };
 
   const res = await api('/api/tickets/panels', { method: 'POST', body: JSON.stringify(body) });
@@ -2859,6 +2965,7 @@ async function addTicketPanel() {
     ['ticket-panel-name', 'ticket-panel-button-label', 'ticket-panel-button-emoji', 'ticket-panel-title', 'ticket-panel-description'].forEach((id) => {
       document.getElementById(id).value = '';
     });
+    if (newPanelMenuEditor) newPanelMenuEditor.reset();
     setFeedback(feedback, 'Panel added!', true);
     refreshTicketConfig();
     refreshAuditLog();

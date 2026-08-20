@@ -1236,16 +1236,17 @@ function buildHelpPayload(list, page, prefix, title) {
 // Sends a paginated, scrollable command list — 20 per page, ◀️/▶️ buttons
 // that grey themselves out at either end. Only the person who ran the
 // command can page through it (anyone else clicking gets a quiet ephemeral
-// nudge to run their own); buttons disable themselves after 5 minutes of
-// no interaction so an old help message doesn't stay clickable forever.
+// nudge to run their own); the whole panel deletes itself after 5 minutes
+// of no interaction (idle timer, resets on every click — not a flat
+// lifetime) so old help messages don't clutter the channel forever.
 async function sendPaginatedHelp(message, list, prefix, title) {
   let page = 0;
   const first = buildHelpPayload(list, page, prefix, title);
   page = first.page;
   const sent = await message.channel.send({ embeds: [first.embed], components: [first.row] });
-  if (first.totalPages <= 1) return null; // nothing to page through, buttons would be permanently disabled anyway — skip the collector entirely
+  if (first.totalPages <= 1) return null; // nothing to page through, nothing to time out — skip the collector entirely
 
-  const collector = sent.createMessageComponentCollector({ componentType: ComponentType.Button, time: 5 * 60 * 1000 });
+  const collector = sent.createMessageComponentCollector({ componentType: ComponentType.Button, idle: 5 * 60 * 1000 });
 
   collector.on('collect', async (interaction) => {
     if (interaction.user.id !== message.author.id) {
@@ -1259,11 +1260,7 @@ async function sendPaginatedHelp(message, list, prefix, title) {
   });
 
   collector.on('end', () => {
-    const disabled = new ActionRowBuilder().addComponents(
-      ButtonBuilder.from(sent.components[0].components[0]).setDisabled(true),
-      ButtonBuilder.from(sent.components[0].components[1]).setDisabled(true)
-    );
-    sent.edit({ components: [disabled] }).catch(() => {});
+    sent.delete().catch(() => {});
   });
 
   return null;
