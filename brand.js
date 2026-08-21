@@ -19,7 +19,12 @@
 const botSettings = require('./botSettings');
 const guildConfig = require('./guildConfig');
 
-const TAGLINE = 'Emerald — emerald-bot-qpsq.onrender.com';
+// Derived from PUBLIC_URL instead of hardcoded — a hardcoded domain here
+// silently goes stale every time the bot moves hosts (this has already
+// happened once). Falls back to a plain "Emerald" tagline if PUBLIC_URL
+// isn't set (e.g. local dev).
+const domain = process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
+const TAGLINE = domain ? `Emerald — ${domain}` : 'Emerald';
 
 function brandFooter(client, guildId, existingText) {
   const disabled = botSettings.isWatermarkDisabled() || (guildId && !!guildConfig.getConfig(guildId).watermarkDisabled);
