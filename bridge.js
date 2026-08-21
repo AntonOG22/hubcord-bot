@@ -86,7 +86,16 @@ async function getCachedBridgeForChannel(channelId) {
   const hit = cacheByChannel.get(channelId);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.bridge;
   if (!supabase) return null;
-  const { data } = await supabase.from('chat_bridges').select('*').eq('discord_channel_id', channelId).maybeSingle().catch(() => ({ data: null }));
+  // Supabase's query builder is thenable but not a real Promise — chaining
+  // .catch() directly onto it throws "catch is not a function" (this
+  // actually happened in production: every single message hit this and
+  // silently broke the discord->twitch direction). try/catch instead.
+  let data = null;
+  try {
+    ({ data } = await supabase.from('chat_bridges').select('*').eq('discord_channel_id', channelId).maybeSingle());
+  } catch (err) {
+    console.error('[bridge] channel lookup failed:', err.message);
+  }
   cacheByChannel.set(channelId, { bridge: data, at: Date.now() });
   return data;
 }
