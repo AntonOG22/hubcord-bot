@@ -941,6 +941,20 @@
           </section>
 
           <section class="card wide">
+            <h2>Twitch Chat Bridge</h2>
+            <p class="muted small">Mirror a Twitch channel's chat into a Discord channel, and optionally the other way around. The Twitch→Discord direction turns on the moment Emerald is already connected to that Twitch channel — no extra approval needed. Discord→Twitch (Discord messages showing up in someone's Twitch chat) needs the broadcaster to approve it themselves on the Twitch dashboard, since that's the sensitive direction.</p>
+
+            <label class="field-label" for="bridge-twitch-login">Twitch username</label>
+            <input id="bridge-twitch-login" type="text" placeholder="e.g. shroud" />
+            <label class="field-label" for="bridge-channel">Discord channel</label>
+            <select id="bridge-channel"></select>
+            <button id="bridge-link-btn" class="primary-button">Link Twitch→Discord</button>
+            <p id="bridge-feedback" class="feedback-text"></p>
+
+            <div id="bridge-list" class="scroll-list"></div>
+          </section>
+
+          <section class="card wide">
             <h2>Join &amp; Leave Messages</h2>
             <p class="muted small">Optional announcement when someone joins or leaves, with an optional fixed image. Placeholders: <code>{user}</code>, <code>{username}</code>, <code>{server}</code>, <code>{membercount}</code>.</p>
 

@@ -133,4 +133,4 @@ async function preloadAll() {
   }
 }
 
-module.exports = { makeGuildStore, preloadAll, safeAssign };
+module.exports = { makeGuildStore, preloadAll, safeAssign, supabase };

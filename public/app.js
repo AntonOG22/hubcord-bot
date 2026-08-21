@@ -1038,6 +1038,7 @@ function init() {
   populateChannelSelect(document.getElementById('reminder-channel'));
   populateChannelSelect(document.getElementById('stream-alert-channel'));
   populateRoleSelect(document.getElementById('stream-alert-role'), { withNone: true, withEveryone: true });
+  populateChannelSelect(document.getElementById('bridge-channel'));
   populateChannelSelect(document.getElementById('fun-channel'));
   populateChannelSelect(document.getElementById('rr-channel'));
   populateChannelSelect(document.getElementById('verification-channel'));
@@ -1077,6 +1078,7 @@ function init() {
   setInterval(refreshGiveaways, 10000);
   setInterval(refreshReminders, 10000);
   setInterval(refreshStreamAlerts, 20000);
+  setInterval(refreshBridges, 20000);
   setInterval(refreshInsights, 20000);
   setInterval(refreshOpenTickets, 10000);
   setInterval(refreshClosedTickets, 15000);
@@ -1102,6 +1104,7 @@ function init() {
   document.getElementById('reminder-btn').addEventListener('click', scheduleReminder);
   document.getElementById('stream-alert-btn').addEventListener('click', addStreamAlert);
   document.getElementById('stream-alert-platform').addEventListener('change', updateStreamAlertPlatformFields);
+  document.getElementById('bridge-link-btn').addEventListener('click', linkBridge);
   document.getElementById('automod-save-btn').addEventListener('click', saveAutomod);
   document.getElementById('lockdown-on-btn').addEventListener('click', () => setLockdown(true));
   document.getElementById('lockdown-off-btn').addEventListener('click', () => setLockdown(false));
@@ -1146,6 +1149,7 @@ function refreshEverything() {
   refreshGiveaways();
   refreshReminders();
   refreshStreamAlerts();
+  refreshBridges();
   refreshAutomod();
   refreshAiAutomod();
   refreshVerification();
@@ -2051,6 +2055,88 @@ async function addStreamAlert() {
 async function removeStreamAlert(id) {
   await api(`/api/stream-alerts/${id}`, { method: 'DELETE' });
   refreshStreamAlerts();
+  refreshAuditLog();
+}
+
+// ---------- Twitch chat bridge ----------
+
+async function refreshBridges() {
+  const res = await api('/api/bridges');
+  const el = document.getElementById('bridge-list');
+  if (!res.ok) return;
+  const bridges = await res.json();
+
+  if (bridges.length === 0) {
+    el.innerHTML = '<span class="empty-hint">No Twitch channel linked yet.</span>';
+    return;
+  }
+
+  el.innerHTML = bridges
+    .map((b) => `
+      <div class="list-row">
+        <div class="list-main">
+          <div class="list-title">🟣 ${escapeHtml(b.twitch_login)}</div>
+          <div class="list-sub">
+            Twitch→Discord ${b.twitch_to_discord ? '✅' : '❌'} ·
+            Discord→Twitch ${b.discord_to_twitch ? '✅ approved' : '⏳ not approved'}
+          </div>
+        </div>
+        <div class="list-actions">
+          ${b.discord_to_twitch ? '' : `<button class="secondary-button" data-bridge-request="${escapeHtml(b.twitch_broadcaster_id)}">Request Discord→Twitch</button>`}
+          <button class="danger-button" data-bridge-remove="${escapeHtml(b.twitch_broadcaster_id)}">Unlink</button>
+        </div>
+      </div>
+    `)
+    .join('');
+
+  el.querySelectorAll('[data-bridge-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => removeBridge(btn.dataset.bridgeRemove));
+  });
+  el.querySelectorAll('[data-bridge-request]').forEach((btn) => {
+    btn.addEventListener('click', () => requestBridgeApproval(btn.dataset.bridgeRequest));
+  });
+}
+
+async function linkBridge() {
+  const feedback = document.getElementById('bridge-feedback');
+  const twitchLogin = document.getElementById('bridge-twitch-login').value.trim();
+  const channelId = document.getElementById('bridge-channel').value;
+  if (!twitchLogin || !channelId) {
+    setFeedback(feedback, 'Enter a Twitch username and pick a channel.', false);
+    return;
+  }
+  const res = await api('/api/bridges/link', { method: 'POST', body: JSON.stringify({ twitchLogin, channelId }) });
+  if (res.ok) {
+    setFeedback(feedback, 'Linked!', true);
+    document.getElementById('bridge-twitch-login').value = '';
+    refreshBridges();
+    refreshAuditLog();
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
+  }
+}
+
+async function requestBridgeApproval(broadcasterId) {
+  const feedback = document.getElementById('bridge-feedback');
+  const res = await api(`/api/bridges/${broadcasterId}/request-approval`, { method: 'POST' });
+  if (res.ok) {
+    const { url } = await res.json();
+    try {
+      await navigator.clipboard.writeText(url);
+      setFeedback(feedback, 'Approval link copied to clipboard — send it to the streamer!', true);
+    } catch {
+      setFeedback(feedback, `Approval link: ${url}`, true);
+    }
+  } else {
+    const data = await res.json();
+    setFeedback(feedback, `Failed: ${data.error}`, false);
+  }
+}
+
+async function removeBridge(broadcasterId) {
+  await api(`/api/bridges/${broadcasterId}`, { method: 'DELETE' });
+  refreshBridges();
   refreshAuditLog();
 }
 

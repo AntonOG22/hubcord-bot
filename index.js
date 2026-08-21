@@ -23,6 +23,7 @@ const { setupJoinLeaveMessages } = require('./joinLeaveMessages');
 const { setupStreamAlerts } = require('./streamAlerts');
 const { setupAiAutomod } = require('./aiAutomod');
 const { preloadAll } = require('./guildStore');
+const { setupBridgeListener } = require('./bridge');
 
 patchConsole();
 
@@ -71,6 +72,7 @@ client.once('ready', async () => {
   setupStreamAlerts(client);
   setupAiAutomod(client);
   verificationGate.setupVerificationGate(client);
+  setupBridgeListener(client);
 
   setupCommandHandler(client, { client });
 });

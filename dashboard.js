@@ -42,6 +42,7 @@ const features = require('./features');
 const joinLeaveMessages = require('./joinLeaveMessages');
 const imageUpload = require('./imageUpload');
 const streamAlerts = require('./streamAlerts');
+const chatBridge = require('./bridge');
 const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
 const { fillPlaceholders } = require('./placeholders');
@@ -1516,6 +1517,83 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   app.delete('/api/stream-alerts/:id', requireGuildAccess, (req, res) => {
     streamAlerts.removeTracked(req.guildId, req.params.id);
     audit(req.guildId, 'Removed stream alert', req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ---------- Twitch <-> Discord chat bridge ----------
+  // Reuses requireGuildAccess (real, live-checked Manage Server permission)
+  // for every route here — nothing about "link this channel to a Twitch
+  // chat" is looser than any other server-changing action in this
+  // dashboard. See bridge.js for the actual permission model between the
+  // two bots (twitch->discord is implied by the bot already being
+  // connected there; discord->twitch needs the broadcaster's own sign-off
+  // on the Twitch bot's dashboard, this side can only request it).
+
+  app.get('/api/bridges', requireGuildAccess, async (req, res) => {
+    try {
+      res.json(await chatBridge.listBridgesForGuild(req.guildId));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/bridges/link', requireGuildAccess, async (req, res) => {
+    const { twitchLogin, channelId } = req.body || {};
+    if (!twitchLogin || !String(twitchLogin).trim()) return res.status(400).json({ error: 'A Twitch username is required.' });
+    if (!channelId || !req.guild.channels.cache.has(channelId)) return res.status(400).json({ error: 'A valid channel in this server is required.' });
+    try {
+      const twitchChannel = await chatBridge.findTwitchChannel(String(twitchLogin).trim());
+      if (!twitchChannel) return res.status(404).json({ error: 'Emerald is not connected to that Twitch channel yet — the streamer needs to connect it on the Twitch dashboard first.' });
+      const bridge = await chatBridge.linkBridge({
+        guildId: req.guildId,
+        guildName: req.guild.name,
+        channelId,
+        twitchBroadcasterId: twitchChannel.broadcasterId,
+        twitchLogin: twitchChannel.login,
+        createdByUserId: req.session.userId,
+      });
+      audit(req.guildId, 'Linked Twitch chat bridge', twitchChannel.login);
+      res.json(bridge);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/bridges/:broadcasterId/request-approval', requireGuildAccess, async (req, res) => {
+    try {
+      const url = await chatBridge.requestApproval(req.guildId, req.params.broadcasterId);
+      audit(req.guildId, 'Requested Discord→Twitch bridge approval', req.params.broadcasterId);
+      res.json({ url });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/bridges/:broadcasterId', requireGuildAccess, async (req, res) => {
+    try {
+      await chatBridge.unlinkBridge(req.guildId, req.params.broadcasterId);
+      audit(req.guildId, 'Removed Twitch chat bridge', req.params.broadcasterId);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Internal relay target: the Twitch bot posts here when a message in a
+  // bridged Twitch chat needs to appear in this bot's Discord channel.
+  // Guarded by the same shared secret both bots hold — never trust a
+  // browser-originated request here.
+  app.post('/api/bridge/relay', (req, res) => {
+    const expected = process.env.BRIDGE_SECRET;
+    const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!expected || !got || got !== expected) return res.status(401).json({ error: 'Unauthorized.' });
+
+    const { guildId, channelId, author, text } = req.body || {};
+    if (!channelId || !text) return res.status(400).json({ error: 'Missing fields.' });
+    const channel = client.channels.cache.get(channelId);
+    if (channel?.isTextBased()) {
+      channel.send(`**[Twitch] ${String(author || '?').slice(0, 100)}:** ${String(text).slice(0, 1900)}`).catch(() => {});
+    }
     res.json({ ok: true });
   });
 
