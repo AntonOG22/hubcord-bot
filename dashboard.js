@@ -1586,13 +1586,23 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   app.post('/api/bridge/relay', (req, res) => {
     const expected = process.env.BRIDGE_SECRET;
     const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!expected || !got || got !== expected) return res.status(401).json({ error: 'Unauthorized.' });
+    const expectedBuf = Buffer.from(expected || '');
+    const gotBuf = Buffer.from(got);
+    const secretOk = expected && got && expectedBuf.length === gotBuf.length && crypto.timingSafeEqual(expectedBuf, gotBuf);
+    if (!secretOk) return res.status(401).json({ error: 'Unauthorized.' });
 
     const { guildId, channelId, author, text } = req.body || {};
     if (!channelId || !text) return res.status(400).json({ error: 'Missing fields.' });
     const channel = client.channels.cache.get(channelId);
     if (channel?.isTextBased()) {
-      channel.send(`**[Twitch] ${String(author || '?').slice(0, 100)}:** ${String(text).slice(0, 1900)}`).catch(() => {});
+      // text/author both come from a Twitch chat message — never let a
+      // viewer's message trigger a real @everyone/@here/role/user ping by
+      // just typing it (every other send() in this codebase restricts
+      // allowedMentions the same way for exactly this reason).
+      channel.send({
+        content: `**[Twitch] ${String(author || '?').slice(0, 100)}:** ${String(text).slice(0, 1900)}`,
+        allowedMentions: { parse: [] },
+      }).catch(() => {});
     }
     res.json({ ok: true });
   });
