@@ -4,7 +4,7 @@
   "description": "Public multi-tenant Discord bot dashboard — every server owner manages only their own servers via real Discord login.",
   "main": "index.js",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "start": "node index.js"
