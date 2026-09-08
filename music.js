@@ -15,7 +15,7 @@
 // just means the bot rejoins fresh next time someone runs !musik.
 const crypto = require('crypto');
 const path = require('path');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -25,7 +25,6 @@ const {
   VoiceConnectionStatus,
   StreamType,
 } = require('@discordjs/voice');
-const ffmpegPath = require('ffmpeg-static');
 const { EmbedBuilder, ChannelType } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { brandFooter } = require('./brand');
@@ -34,6 +33,25 @@ const features = require('./features');
 // Downloaded by scripts/download-yt-dlp.js on `npm install` (see that file
 // for why it's a plain Node script instead of the yt-dlp-exec package).
 const YTDLP_PATH = path.join(__dirname, 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+
+// Prefer a system `ffmpeg` on PATH — on Railway that's the apt package
+// (RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg), a real build for that exact distro/
+// kernel. ffmpeg-static's generic prebuilt Linux binary segfaulted (SIGSEGV)
+// immediately on Railway's runtime image — every song "played" for an
+// instant and produced silence, since the player still entered its Playing
+// state via silence-padding before the (empty) real stream ever arrived.
+// Falls back to the ffmpeg-static bundled binary when there's no system
+// ffmpeg (e.g. local dev on a machine that never installed one).
+function resolveFfmpegPath() {
+  if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    return 'ffmpeg';
+  } catch {
+    return require('ffmpeg-static');
+  }
+}
+const ffmpegPath = resolveFfmpegPath();
 
 const YOUTUBE_REGEX = /(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)[\w-]+/i;
 
