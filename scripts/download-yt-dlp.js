@@ -13,7 +13,14 @@ const https = require('https');
 const BIN_DIR = path.join(__dirname, '..', 'bin');
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
-const releaseAsset = isWindows ? 'yt-dlp.exe' : isMac ? 'yt-dlp_macos' : 'yt-dlp';
+// yt-dlp publishes two kinds of Unix build: plain "yt-dlp" is a zipimport
+// script that shells out to a system `python3` on PATH (which Railway's
+// runtime image doesn't have — this is exactly what broke playback at
+// runtime after the build itself succeeded), while "yt-dlp_linux" /
+// "yt-dlp_macos" are PyInstaller-bundled standalone binaries with their own
+// Python baked in, no system interpreter needed. Always use the standalone
+// one.
+const releaseAsset = isWindows ? 'yt-dlp.exe' : isMac ? 'yt-dlp_macos' : 'yt-dlp_linux';
 const dest = path.join(BIN_DIR, isWindows ? 'yt-dlp.exe' : 'yt-dlp');
 const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${releaseAsset}`;
 
