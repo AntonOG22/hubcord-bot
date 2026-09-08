@@ -245,6 +245,12 @@ async function resolveTrack(query) {
     '--no-check-certificates',
     '--no-warnings',
     '--prefer-free-formats',
+    // The "web" client is what YouTube throttles/403s hardest from
+    // datacenter IPs (exactly what a Railway/Render/Heroku host looks like
+    // to them) — "android" gets a direct googlevideo URL that's far less
+    // likely to be blocked. Listing both keeps working for anything android
+    // can't resolve (age-gated/region-locked videos, mainly).
+    '--extractor-args', 'youtube:player_client=android,web',
     '-f', 'bestaudio/best',
     target,
   ]);
@@ -254,6 +260,11 @@ async function resolveTrack(query) {
 
   return {
     streamUrl: picked.url,
+    // yt-dlp resolves a direct CDN URL that (for YouTube) is only reliably
+    // fetchable with the same request headers yt-dlp itself used — handing
+    // ffmpeg the bare URL with no headers is a common cause of a silent
+    // 403 (the track "plays" but no audio ever arrives).
+    httpHeaders: picked.http_headers || null,
     title: picked.title || 'Unknown title',
     webpageUrl: picked.webpage_url || (isUrl ? query : null),
     duration: picked.duration || null,
@@ -264,12 +275,21 @@ async function resolveTrack(query) {
 // Spawns ffmpeg to transcode the resolved stream URL to raw PCM on stdout —
 // same shape as the Python prototype's discord.FFmpegPCMAudio, just driven
 // by hand here so the process can be killed cleanly on skip/stop instead of
-// leaking a zombie ffmpeg per song.
-function spawnFfmpegPcm(streamUrl) {
+// leaking a zombie ffmpeg per song. stderr is captured (not just piped and
+// ignored) specifically so a fetch failure against the stream URL — a 403
+// from YouTube being the big one — shows up in logs and as a real skip
+// instead of silent "now playing" silence.
+function spawnFfmpegPcm(streamUrl, httpHeaders) {
   const args = [
     '-reconnect', '1',
     '-reconnect_streamed', '1',
     '-reconnect_delay_max', '5',
+  ];
+  if (httpHeaders && Object.keys(httpHeaders).length > 0) {
+    const headerLines = Object.entries(httpHeaders).map(([k, v]) => `${k}: ${v}`).join('\r\n') + '\r\n';
+    args.push('-headers', headerLines);
+  }
+  args.push(
     '-i', streamUrl,
     '-analyzeduration', '0',
     '-loglevel', 'error',
@@ -277,7 +297,7 @@ function spawnFfmpegPcm(streamUrl) {
     '-ar', '48000',
     '-ac', '2',
     'pipe:1',
-  ];
+  );
   return spawn(ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
@@ -355,9 +375,33 @@ async function playNext(guildId) {
     recordHistory(guildId, track, next);
 
     killFfmpeg(state);
-    const proc = spawnFfmpegPcm(track.streamUrl);
+    const proc = spawnFfmpegPcm(track.streamUrl, track.httpHeaders);
     state.ffmpegProc = proc;
+
+    let stderrTail = '';
+    proc.stderr?.on('data', (chunk) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-2000); // keep it bounded, we only need the last error
+    });
     proc.on('error', (err) => console.error(`ffmpeg failed to start for guild ${guildId}:`, err.message));
+
+    // ffmpeg can exit 0 bytes written (e.g. a 403 from YouTube fetching the
+    // stream URL) without ever emitting a player 'error' — @discordjs/voice
+    // just sees an empty stream end and goes Idle, which looked from the
+    // outside exactly like "says it's playing, plays nothing". Track
+    // whether any audio actually made it out of ffmpeg so a silent failure
+    // gets reported instead of quietly moving on.
+    let gotAudio = false;
+    proc.stdout.once('data', () => { gotAudio = true; });
+    proc.once('exit', (code) => {
+      if (!gotAudio && state.ffmpegProc === proc) {
+        console.error(`ffmpeg produced no audio for guild ${guildId} (exit ${code}): ${stderrTail.trim() || '(no stderr output)'}`);
+        if (state.textChannelId && clientRef) {
+          clientRef.channels.fetch(state.textChannelId)
+            .then((ch) => ch?.send(`⚠️ Couldn't fetch audio for **${track.title}** (YouTube blocked or rate-limited the request) — skipping.`))
+            .catch(() => {});
+        }
+      }
+    });
 
     const resource = createAudioResource(proc.stdout, { inputType: StreamType.Raw, inlineVolume: true });
     resource.volume.setVolume((state.volume ?? getSettings(guildId).defaultVolume) / 100);
