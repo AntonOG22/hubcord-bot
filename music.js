@@ -316,14 +316,28 @@ async function ensureConnection(message) {
       selfDeaf: true,
     });
     state.player = createAudioPlayer();
-    state.connection.subscribe(state.player);
+    const subscription = state.connection.subscribe(state.player);
+    if (!subscription) {
+      console.error(`Music: connection.subscribe() returned null for guild ${message.guild.id} — the player has no active subscriber, so nothing would ever actually be sent to voice.`);
+    }
+
+    // Temporary-but-cheap diagnostics: every status change, on both the
+    // connection and the player, logged with guild id. Cheap enough to
+    // leave in permanently — this is exactly the kind of "says it's
+    // playing but nothing happens" failure that's otherwise invisible.
+    state.connection.on('stateChange', (oldState, newState) => {
+      console.log(`Music voice connection [${message.guild.id}]: ${oldState.status} -> ${newState.status}`);
+    });
+    state.player.on('stateChange', (oldState, newState) => {
+      console.log(`Music player [${message.guild.id}]: ${oldState.status} -> ${newState.status}`);
+    });
 
     state.player.on(AudioPlayerStatus.Idle, () => {
       killFfmpeg(state);
       playNext(message.guild.id).catch((err) => console.error(`Music playNext failed in guild ${message.guild.id}:`, err.message));
     });
     state.player.on('error', (err) => {
-      console.error(`Music player error in guild ${message.guild.id}:`, err.message);
+      console.error(`Music player error in guild ${message.guild.id}:`, err.message, err.stack || '');
       killFfmpeg(state);
       playNext(message.guild.id).catch((e) => console.error(`Music playNext failed in guild ${message.guild.id}:`, e.message));
     });
@@ -392,12 +406,12 @@ async function playNext(guildId) {
     // gets reported instead of quietly moving on.
     let gotAudio = false;
     proc.stdout.once('data', () => { gotAudio = true; });
-    proc.once('exit', (code) => {
+    proc.once('exit', (code, signal) => {
       if (!gotAudio && state.ffmpegProc === proc) {
-        console.error(`ffmpeg produced no audio for guild ${guildId} (exit ${code}): ${stderrTail.trim() || '(no stderr output)'}`);
+        console.error(`ffmpeg produced no audio for guild ${guildId} (exit code=${code} signal=${signal}): ${stderrTail.trim() || '(no stderr output)'}`);
         if (state.textChannelId && clientRef) {
           clientRef.channels.fetch(state.textChannelId)
-            .then((ch) => ch?.send(`⚠️ Couldn't fetch audio for **${track.title}** (YouTube blocked or rate-limited the request) — skipping.`))
+            .then((ch) => ch?.send(`⚠️ Couldn't fetch audio for **${track.title}** — skipping.`))
             .catch(() => {});
         }
       }
