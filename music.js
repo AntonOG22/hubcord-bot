@@ -80,8 +80,9 @@ const MUSIC_COMMANDS = [
   { key: 'automaticstop', label: '!automaticstop', description: 'Stops automatic playback mode.', defaultOpen: false },
 ];
 
-const AUTOMATIC_BATCH_SIZE = 8; // how many candidates to fetch per search
+const AUTOMATIC_BATCH_SIZE = 15; // how many candidates to fetch per search
 const AUTOMATIC_REFILL_AHEAD = 2; // refill once fewer than this many automatic tracks remain queued
+const AUTOMATIC_RETURN_HOME_MS = 30 * 1000; // how long to wait, idle in an away channel, before hopping back
 
 const DEFAULT_IDLE_DISCONNECT_SECONDS = 180;
 const DEFAULT_VOTE_SKIP_THRESHOLD = 50;
@@ -249,8 +250,47 @@ function clearIdleTimer(state) {
 function scheduleIdleDisconnect(guildId) {
   const state = getState(guildId);
   clearIdleTimer(state);
+
+  // An admin's request from a different voice channel pulled the bot away
+  // from a running automatic session (see ensureConnection's rejoin) — once
+  // whatever they queued there finishes and it's quiet for a bit, hop back
+  // and pick the automatic playlist back up, rather than just idling (or
+  // fully disconnecting) in the away channel indefinitely.
+  const homeId = state.automatic?.active ? state.automatic.homeChannelId : null;
+  if (homeId && state.connection && state.connection.joinConfig.channelId !== homeId) {
+    state.idleTimer = setTimeout(() => {
+      returnToAutomaticHome(guildId).catch((err) => console.error(`Automatic mode return-home failed for guild ${guildId}:`, err.message));
+    }, AUTOMATIC_RETURN_HOME_MS);
+    return;
+  }
+
   const seconds = getSettings(guildId).idleDisconnectSeconds;
   state.idleTimer = setTimeout(() => stop(guildId), seconds * 1000);
+}
+
+async function returnToAutomaticHome(guildId) {
+  const state = getState(guildId);
+  if (!state.automatic?.active || !state.connection) return;
+  const { homeChannelId, homeTextChannelId } = state.automatic;
+  if (!homeChannelId) return;
+
+  if (state.connection.joinConfig.channelId !== homeChannelId) {
+    const guild = clientRef?.guilds.cache.get(guildId);
+    if (!guild) return;
+    try {
+      state.connection.rejoin({ channelId: homeChannelId, guildId, selfDeaf: true, adapterCreator: guild.voiceAdapterCreator });
+    } catch (err) {
+      console.error(`Automatic mode: couldn't rejoin home channel in guild ${guildId}:`, err.message);
+      return;
+    }
+  }
+
+  state.textChannelId = homeTextChannelId || state.textChannelId;
+  clearIdleTimer(state);
+  if (!state.current) {
+    await refillAutomaticQueue(guildId);
+    await playNext(guildId);
+  }
 }
 
 function killFfmpeg(state) {
@@ -396,8 +436,18 @@ async function playNext(guildId) {
     state.queue.unshift({ ...state.current, id: crypto.randomUUID() });
   }
 
+  // Refilling and continuing automatic playback here only makes sense at
+  // its home channel — if an admin's request elsewhere pulled the bot away
+  // (see ensureConnection's rejoin) and their queue just ran dry, it should
+  // wait to see if they're done (scheduleIdleDisconnect handles hopping
+  // back home after a short quiet period), not start playing the mood
+  // playlist into whatever channel it currently happens to be in.
+  const atAutomaticHome = !state.automatic?.active
+    || !state.automatic.homeChannelId
+    || state.connection?.joinConfig.channelId === state.automatic.homeChannelId;
+
   let next = state.queue.shift();
-  if (!next && state.automatic?.active) {
+  if (!next && state.automatic?.active && atAutomaticHome) {
     await refillAutomaticQueue(guildId);
     next = state.queue.shift();
     if (!next && state.textChannelId && clientRef) {
@@ -492,7 +542,7 @@ async function playNext(guildId) {
     // Top the queue back up in the background once it's running low, so
     // playback doesn't visibly stall waiting on a search every single time
     // it happens to run dry — this fires "ahead of time" instead.
-    if (state.automatic?.active) {
+    if (state.automatic?.active && atAutomaticHome) {
       const automaticQueued = state.queue.filter((e) => e.isAutomatic).length;
       if (automaticQueued < AUTOMATIC_REFILL_AHEAD) {
         refillAutomaticQueue(guildId).catch((err) => console.error(`Automatic mode refill failed for guild ${guildId}:`, err.message));
@@ -606,7 +656,18 @@ async function refillAutomaticQueue(guildId) {
   } catch {
     return;
   }
-  const candidates = (info.entries || []).filter((e) => e && e.id && e.url && !state.automatic.seen.has(e.id));
+  const allResults = (info.entries || []).filter((e) => e && e.id && e.url);
+
+  // Genuinely a real, infinite loop: a search for one mood keeps returning
+  // roughly the same top results every time, so once everything currently
+  // findable has already been queued once, "seen" would otherwise filter
+  // the list down to nothing and automatic mode would give up after one
+  // batch. Prefer never-played results, but once those run out, recycle
+  // the mood's playlist from the top instead of stopping — that's the
+  // actual point of "automatic chill music forever" until !automaticstop.
+  const fresh = allResults.filter((e) => !state.automatic.seen.has(e.id));
+  const candidates = fresh.length > 0 ? fresh : allResults;
+  if (fresh.length === 0) state.automatic.seen.clear(); // starting a fresh lap
 
   // Shuffle (Fisher-Yates) so repeated refills don't always play the same
   // search-ranked order, and so back-to-back automatic sessions don't feel
@@ -642,7 +703,17 @@ async function startAutomatic(message, mood) {
     throw new Error(`Automatic mode is already running ("${state.automatic.mood}") — use !automaticstop first to change it.`);
   }
 
-  state.automatic = { active: true, mood, startedBy: message.author.id, seen: new Set() };
+  state.automatic = {
+    active: true,
+    mood,
+    startedBy: message.author.id,
+    seen: new Set(),
+    // Remembered so the bot can find its way back here — see
+    // returnToAutomaticHome() — if an admin's request from a different
+    // voice channel pulls it away mid-session.
+    homeChannelId: message.member.voice.channel.id,
+    homeTextChannelId: message.channel.id,
+  };
   await refillAutomaticQueue(message.guild.id);
   if (state.queue.length === 0) {
     state.automatic = null;
