@@ -22,3 +22,5 @@ verification-state.json
 custom-commands.json
 bot-settings.json
 join-leave-config.json
+music-settings.json
+music-history.json

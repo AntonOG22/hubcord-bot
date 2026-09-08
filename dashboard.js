@@ -42,6 +42,7 @@ const features = require('./features');
 const joinLeaveMessages = require('./joinLeaveMessages');
 const imageUpload = require('./imageUpload');
 const streamAlerts = require('./streamAlerts');
+const music = require('./music');
 const chatBridge = require('./bridge');
 const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
@@ -1393,13 +1394,22 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
   app.get('/api/commands', requireGuildAccess, (req, res) => {
     const state = commandConfig.getState(req.guildId);
+    // Music commands don't use the fixed Discord `permission` bit at all —
+    // they're gated per-role from the dashboard's own Music tab (see
+    // music.js), so `permission: null` here would otherwise misleadingly
+    // read as "everyone" even for e.g. !stop, which defaults to admin-only.
+    const musicDef = req.guildId ? Object.fromEntries(music.MUSIC_COMMANDS.map((c) => [c.label.replace(/^!/, ''), c])) : {};
     const list = commandList.map((c) => ({
       name: c.name,
       aliases: c.aliases,
       category: c.category,
       usage: c.usage,
       description: c.description,
-      permission: permissionLabel(c.permission),
+      permission: c.category === 'Music'
+        ? (c.name === 'voteskip'
+          ? 'everyone in the voice channel (not role-gated — see the Music tab)'
+          : `per-role permission set in the Music tab (default: ${musicDef[c.name] && musicDef[c.name].defaultOpen ? 'everyone' : 'Administrators'})`)
+        : permissionLabel(c.permission),
       disabled: state.disabled.includes(c.name),
     }));
     res.json({ prefix: state.prefix, commands: list });
@@ -1518,6 +1528,101 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     streamAlerts.removeTracked(req.guildId, req.params.id);
     audit(req.guildId, 'Removed stream alert', req.params.id);
     res.json({ ok: true });
+  });
+
+  // ---------- Music ----------
+  // Dashboard actions here bypass music.canUseMusicCommand() on purpose —
+  // requireGuildAccess already means real, live-checked Manage Server (or
+  // owner/Administrator), same as every other server-changing dashboard
+  // route. The per-role allow-lists configured below only gate the in-chat
+  // !commands, not this panel.
+
+  app.get('/api/music/settings', requireGuildAccess, (req, res) => {
+    res.json({ settings: music.getSettings(req.guildId), commands: music.MUSIC_COMMANDS });
+  });
+
+  app.post('/api/music/settings', requireGuildAccess, (req, res) => {
+    const settings = music.updateSettings(req.guildId, req.body || {});
+    audit(req.guildId, 'Updated music settings');
+    res.json(settings);
+  });
+
+  app.get('/api/music/status', requireGuildAccess, (req, res) => {
+    res.json(music.getStatus(req.guildId));
+  });
+
+  app.post('/api/music/skip', requireGuildAccess, (req, res) => {
+    if (!music.isActive(req.guildId)) return res.status(400).json({ error: 'Nothing is playing.' });
+    music.skip(req.guildId);
+    audit(req.guildId, 'Skipped current song (dashboard)');
+    res.json({ ok: true });
+  });
+
+  app.post('/api/music/pause', requireGuildAccess, (req, res) => {
+    res.json({ ok: music.pause(req.guildId) });
+  });
+
+  app.post('/api/music/resume', requireGuildAccess, (req, res) => {
+    res.json({ ok: music.resume(req.guildId) });
+  });
+
+  app.post('/api/music/stop', requireGuildAccess, (req, res) => {
+    music.stop(req.guildId);
+    audit(req.guildId, 'Stopped music (dashboard)');
+    res.json({ ok: true });
+  });
+
+  app.post('/api/music/clear-queue', requireGuildAccess, (req, res) => {
+    const count = music.clearQueue(req.guildId);
+    audit(req.guildId, 'Cleared music queue (dashboard)', `${count} song(s)`);
+    res.json({ ok: true, count });
+  });
+
+  app.delete('/api/music/queue/:id', requireGuildAccess, (req, res) => {
+    const removed = music.removeFromQueue(req.guildId, req.params.id);
+    res.json({ removed });
+  });
+
+  app.post('/api/music/volume', requireGuildAccess, (req, res) => {
+    try {
+      const volume = music.setVolume(req.guildId, req.body?.volume);
+      res.json({ volume });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/music/history', requireGuildAccess, (req, res) => {
+    res.json(music.getHistory(req.guildId));
+  });
+
+  // Queues a song straight from the dashboard, no chat command needed —
+  // reuses music.enqueue() with a duck-typed "message" built from the real,
+  // live-fetched Discord member (so it's still exactly the same permission,
+  // cooldown, and voice-channel logic a real !musik in chat goes through;
+  // this doesn't bypass any of it). Requires the dashboard user to actually
+  // be connected to a voice channel right now — the dashboard can drive an
+  // existing bot session, it can't join a channel on someone's behalf.
+  app.post('/api/music/play', requireGuildAccess, async (req, res) => {
+    const query = (req.body?.query || '').trim();
+    if (!query) return res.status(400).json({ error: 'Give me a song name or a YouTube link.' });
+    try {
+      const member = await req.guild.members.fetch(req.session.userId);
+      if (!member.voice?.channel) {
+        return res.status(400).json({ error: "You need to be connected to a voice channel in Discord right now — the dashboard can control an existing session, but can't join one for you." });
+      }
+      const fakeMessage = {
+        guild: req.guild,
+        member,
+        author: { id: member.id, tag: member.user.tag },
+        channel: member.voice.channel, // music.js posts "Now playing" here, same as a real chat command would
+      };
+      const result = await music.enqueue(fakeMessage, query);
+      audit(req.guildId, 'Queued a song (dashboard)', query);
+      res.json({ position: result.position, startingNow: result.startingNow, title: result.entry.title || result.entry.query });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   // ---------- Twitch <-> Discord chat bridge ----------

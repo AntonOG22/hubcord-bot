@@ -27,6 +27,7 @@ const guildConfig = require('./guildConfig');
 const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
+const music = require('./music');
 
 const P = PermissionFlagsBits;
 
@@ -1265,6 +1266,163 @@ async function sendPaginatedHelp(message, list, prefix, title) {
 
   return null;
 }
+
+// ===== MUSIC =====
+// `permission` is left null on every one of these — access is gated inside
+// each run() via music.requirePermission(), which checks the per-server,
+// per-role allow-lists configured on the dashboard's Music tab instead of a
+// fixed Discord permission bit (Administrator always passes either way).
+
+cmd({
+  name: 'musik', aliases: ['music', 'play', 'p'], category: 'Music', permission: null,
+  usage: '<song name or YouTube link>', description: 'Plays a song in your voice channel, or adds it to the queue if one is already playing. Non-admins can request one song per minute.',
+  run: async (message, args) => {
+    music.requirePermission(message.guild.id, 'play', message.member);
+    const query = args.join(' ').trim();
+    if (!query) throw new Error('Give me a song name or a YouTube link, e.g. `!musik never gonna give you up`.');
+    const result = await music.enqueue(message, query);
+    if (result.startingNow) return null; // playNext() already posts its own "Now playing" embed
+    return `🎶 Added to the queue at position **${result.position + 1}**: ${result.entry.query}`;
+  },
+});
+
+cmd({
+  name: 'queue', aliases: ['musicqueue', 'mq'], category: 'Music', permission: null,
+  usage: '', description: 'Shows what\'s currently playing and what\'s queued up next.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'queue', message.member);
+    music.requireVoiceChatChannel(message);
+    const status = music.getStatus(message.guild.id);
+    if (!status.current && status.queue.length === 0) return 'Nothing is playing and the queue is empty.';
+    const lines = [];
+    if (status.current) lines.push(`▶️ **Now playing:** ${status.current.title} (requested by <@${status.current.requestedBy}>)`);
+    if (status.queue.length > 0) {
+      lines.push('', '**Up next:**');
+      status.queue.slice(0, 15).forEach((e, i) => lines.push(`${i + 1}. ${e.title}${e.isAdmin ? ' 👑' : ''} — <@${e.requestedBy}>`));
+      if (status.queue.length > 15) lines.push(`…and ${status.queue.length - 15} more.`);
+    }
+    return lines.join('\n');
+  },
+});
+
+cmd({
+  name: 'nowplaying', aliases: ['np', 'current'], category: 'Music', permission: null,
+  usage: '', description: 'Shows what song is currently playing.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'nowplaying', message.member);
+    music.requireVoiceChatChannel(message);
+    const status = music.getStatus(message.guild.id);
+    if (!status.current) return 'Nothing is playing right now.';
+    return `▶️ **${status.current.title}** — requested by <@${status.current.requestedBy}>${status.paused ? ' (paused)' : ''}`;
+  },
+});
+
+cmd({
+  name: 'skip', aliases: ['musicskip'], category: 'Music', permission: null,
+  usage: '', description: 'Skips the current song. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'skip', message.member);
+    music.requireVoiceChatChannel(message);
+    if (!music.isActive(message.guild.id)) return 'Nothing is playing.';
+    music.skip(message.guild.id);
+    return '⏭️ Skipped.';
+  },
+});
+
+cmd({
+  name: 'voteskip', aliases: ['vs'], category: 'Music', permission: null,
+  usage: '', description: 'Votes to skip the current song — usable by anyone in the voice channel, no role needed. Passes once the configured percentage of members have voted (dashboard\'s Music tab). Meant as a fallback for when !skip is locked to admins/DJs and none are around.',
+  run: async (message) => {
+    music.requireVoiceChatChannel(message);
+    if (!music.isActive(message.guild.id)) return 'Nothing is playing.';
+    const voiceChannel = message.guild.members.me?.voice?.channel;
+    const memberCount = voiceChannel ? voiceChannel.members.filter((m) => !m.user.bot).size : 1;
+    const result = music.voteSkip(message.guild.id, message.author.id, memberCount);
+    return result.skipped
+      ? `⏭️ Vote passed (${result.votes}/${result.needed}) — skipped!`
+      : `🗳️ Vote to skip: **${result.votes}/${result.needed}** needed.`;
+  },
+});
+
+cmd({
+  name: 'pause', aliases: ['musicpause'], category: 'Music', permission: null,
+  usage: '', description: 'Pauses playback. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'pause', message.member);
+    music.requireVoiceChatChannel(message);
+    return music.pause(message.guild.id) ? '⏸️ Paused.' : 'Nothing is playing.';
+  },
+});
+
+cmd({
+  name: 'resume', aliases: ['musicresume', 'unpause'], category: 'Music', permission: null,
+  usage: '', description: 'Resumes playback. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'resume', message.member);
+    music.requireVoiceChatChannel(message);
+    return music.resume(message.guild.id) ? '▶️ Resumed.' : 'Nothing is paused.';
+  },
+});
+
+cmd({
+  name: 'stop', aliases: ['musicstop', 'leave'], category: 'Music', permission: null,
+  usage: '', description: 'Stops playback, clears the queue, and leaves the voice channel. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'stop', message.member);
+    music.requireVoiceChatChannel(message);
+    if (!music.isActive(message.guild.id)) return 'I\'m not in a voice channel right now.';
+    music.stop(message.guild.id);
+    return '⏹️ Stopped, queue cleared, see you later!';
+  },
+});
+
+cmd({
+  name: 'musicqueueclear', aliases: ['clearqueue', 'queueclear'], category: 'Music', permission: null,
+  usage: '', description: 'Clears the queue without stopping the current song. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'clear', message.member);
+    music.requireVoiceChatChannel(message);
+    const count = music.clearQueue(message.guild.id);
+    return count > 0 ? `🗑️ Cleared ${count} song(s) from the queue.` : 'The queue is already empty.';
+  },
+});
+
+cmd({
+  name: 'musicremove', aliases: ['removesong'], category: 'Music', permission: null,
+  usage: '<position>', description: 'Removes a specific song from the queue by its position (see !queue). Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message, args) => {
+    music.requirePermission(message.guild.id, 'remove', message.member);
+    music.requireVoiceChatChannel(message);
+    const pos = parseInt(args[0], 10);
+    if (!pos || pos < 1) throw new Error('Give me a queue position, e.g. `!musicremove 2` (see `!queue`).');
+    const removed = music.removeFromQueue(message.guild.id, pos - 1);
+    if (!removed) throw new Error('No song at that queue position.');
+    return `🗑️ Removed **${removed.title || removed.query}** from the queue.`;
+  },
+});
+
+cmd({
+  name: 'volume', aliases: ['vol'], category: 'Music', permission: null,
+  usage: '<0-150>', description: 'Sets the playback volume (%). Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message, args) => {
+    music.requirePermission(message.guild.id, 'volume', message.member);
+    music.requireVoiceChatChannel(message);
+    if (!args[0]) return `🔊 Current volume: ${music.getStatus(message.guild.id).volume}%`;
+    const vol = music.setVolume(message.guild.id, args[0]);
+    return `🔊 Volume set to ${vol}%.`;
+  },
+});
+
+cmd({
+  name: 'loop', aliases: ['repeat'], category: 'Music', permission: null,
+  usage: '', description: 'Toggles looping the current song. Admins only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'loop', message.member);
+    music.requireVoiceChatChannel(message);
+    const looping = music.toggleLoop(message.guild.id);
+    return looping ? '🔁 Looping is now ON.' : '🔁 Looping is now OFF.';
+  },
+});
 
 cmd({
   name: 'help', aliases: ['commands'], category: 'Info', permission: null,

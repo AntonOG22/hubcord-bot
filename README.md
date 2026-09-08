@@ -30,6 +30,21 @@ Requires a Discord Application with:
 - An OAuth2 Client Secret (OAuth2 tab)
 - A redirect URI registered: `http://localhost:3001/auth/callback` (or your deployed URL + `/auth/callback`)
 
+### Music
+
+`!musik <name or link>` plays audio in a voice channel — resolved via
+`yt-dlp-exec` (downloads its own `yt-dlp` binary on `npm install`, no system
+install needed), transcoded with `ffmpeg-static` (bundles its own `ffmpeg`
+binary too), and Opus-encoded with `opusscript` (pure JS, no native build
+step) — so no extra system packages or build tools are required on
+Render/Railway, and `npm install` works the same on any host including
+plain Windows dev machines with no C++ build tools installed. (A native
+encoder like `@discordjs/opus` is faster, but needs node-gyp + a C++
+toolchain at install time — not worth the deploy fragility here.)
+Per-command role permissions and playback controls live in the dashboard's
+**Music** tab; `!stop` is Administrator-only by default (grantable to other
+roles from there).
+
 ## Deploying to Render
 
 1. Push to a GitHub repo.

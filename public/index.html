@@ -190,6 +190,7 @@
       <button class="nav-button" data-tab="messaging"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5z"/></svg></span>Messaging</button>
       <button class="nav-button" data-tab="automation"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.6 6.4"/><path d="M20 4v7h-7"/></svg></span>Automation</button>
       <button class="nav-button" data-tab="fun"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg></span>Fun</button>
+      <button class="nav-button" data-tab="music"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></span>Music</button>
       <button class="nav-button" data-tab="leveling"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z"/></svg></span>Leveling</button>
       <button class="nav-button" data-tab="insights"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg></span>Insights</button>
       <button class="nav-button" data-tab="server"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><circle cx="7.5" cy="7" r="0.6" fill="currentColor" stroke="none"/><circle cx="7.5" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></span>Server</button>
@@ -812,6 +813,96 @@
             <button id="rr-btn" class="primary-button">Create</button>
             <p id="rr-feedback" class="feedback-text"></p>
             <div id="rr-list" class="scroll-list"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ===================== MUSIC ===================== -->
+      <section id="tab-music" class="tab-panel hidden">
+        <div class="page-head">
+          <span class="page-eyebrow">Voice</span>
+          <h1>Music</h1>
+          <p class="muted">Song playback in voice channels via <code>!musik &lt;name or link&gt;</code>. Music commands only work in a voice channel's own chat (the "Chat" tab inside a voice channel), never in regular text channels. Non-admins can request one song per minute; admin requests jump to the front of the queue. Decide per command which roles can use it below.</p>
+        </div>
+
+        <div class="grid">
+
+          <section class="card wide">
+            <h2>Now Playing</h2>
+            <div id="music-nowplaying">
+              <p class="muted small">Loading…</p>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button id="music-pause-btn" class="secondary-button">Pause</button>
+              <button id="music-resume-btn" class="secondary-button">Resume</button>
+              <button id="music-skip-btn" class="secondary-button">Skip</button>
+              <button id="music-stop-btn" class="danger-button">Stop &amp; Leave</button>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <input id="music-volume-input" type="number" min="0" max="150" placeholder="Volume %" style="max-width:120px" />
+              <button id="music-volume-btn" class="secondary-button">Set Volume</button>
+              <button id="music-clearqueue-btn" class="secondary-button">Clear Queue</button>
+            </div>
+            <p id="music-control-feedback" class="feedback-text"></p>
+            <h3 style="margin-top:18px">Queue</h3>
+            <div id="music-queue-list" class="scroll-list"><span class="empty-hint">Nothing queued.</span></div>
+          </section>
+
+          <section class="card wide">
+            <h2>Play from Dashboard</h2>
+            <p class="muted small">Queues a song without touching Discord chat. You need to be connected to a voice channel in this server right now — the bot joins wherever you already are, same as <code>!musik</code> would.</p>
+            <div class="row">
+              <input id="music-play-input" type="text" placeholder="Song name or YouTube link…" />
+              <button id="music-play-btn" class="primary-button">Queue</button>
+            </div>
+            <p id="music-play-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Settings</h2>
+            <div class="toggle-row">
+              <span class="toggle-label">Announce "Now playing" in chat</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="music-announce" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label class="field-label" for="music-default-volume">Default volume (%)</label>
+            <input id="music-default-volume" type="number" min="0" max="150" value="100" />
+            <label class="field-label" for="music-max-queue">Max queue size</label>
+            <input id="music-max-queue" type="number" min="1" max="300" value="100" />
+            <label class="field-label" for="music-max-duration">Max song length (minutes, 0 = unlimited)</label>
+            <input id="music-max-duration" type="number" min="0" max="180" value="0" />
+            <label class="field-label" for="music-idle-timeout">Auto-leave after this many seconds idle</label>
+            <input id="music-idle-timeout" type="number" min="30" max="1800" value="180" />
+
+            <div class="toggle-row" style="margin-top:16px">
+              <span class="toggle-label">Vote-skip <span class="muted small">(lets anyone in voice vote to skip, even if !skip is locked to a role)</span></span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="music-voteskip-enabled" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label class="field-label" for="music-voteskip-threshold">Vote-skip threshold (% of voice channel members)</label>
+            <input id="music-voteskip-threshold" type="number" min="1" max="100" value="50" />
+
+            <button id="music-settings-save-btn" class="primary-button" style="margin-top:12px">Save Settings</button>
+            <p id="music-settings-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Command Permissions</h2>
+            <p class="muted small">Empty = the default for that command (see below each one). Administrators can always use every music command. <code>!voteskip</code> is always open to everyone in the voice channel and isn't listed here — see the threshold setting above.</p>
+            <div id="music-permissions-list"><span class="empty-hint">Loading…</span></div>
+            <button id="music-permissions-save-btn" class="primary-button" style="margin-top:12px">Save Permissions</button>
+            <p id="music-permissions-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>History</h2>
+            <p class="muted small">The last 50 songs played on this server.</p>
+            <div id="music-history-list" class="scroll-list"><span class="empty-hint">Nothing played yet.</span></div>
           </section>
 
         </div>

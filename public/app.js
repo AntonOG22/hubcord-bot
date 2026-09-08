@@ -1068,6 +1068,8 @@ function init() {
   ]).then(refreshTicketConfig);
   createMenuOptionsEditor(document.getElementById('ticket-panel-menu-options'), []).then((editor) => { newPanelMenuEditor = editor; });
 
+  refreshMusicSettings();
+
   refreshEverything();
 
   setInterval(refreshStatus, 5000);
@@ -1083,6 +1085,8 @@ function init() {
   setInterval(refreshOpenTickets, 10000);
   setInterval(refreshClosedTickets, 15000);
   setInterval(refreshTicketStats, 20000);
+  setInterval(refreshMusicStatus, 5000);
+  setInterval(refreshMusicHistory, 20000);
 
   document.getElementById('send-button').addEventListener('click', sendMessage);
   document.getElementById('purge-btn').addEventListener('click', purgeMessages);
@@ -1123,6 +1127,18 @@ function init() {
   document.getElementById('rate-command-add-btn').addEventListener('click', addRateCommand);
   document.getElementById('customcmd-add-btn').addEventListener('click', addCustomCommand);
   document.getElementById('rp-add-btn').addEventListener('click', addRolePanel);
+  document.getElementById('music-settings-save-btn').addEventListener('click', saveMusicSettings);
+  document.getElementById('music-permissions-save-btn').addEventListener('click', saveMusicPermissions);
+  document.getElementById('music-pause-btn').addEventListener('click', () => musicControl('pause'));
+  document.getElementById('music-resume-btn').addEventListener('click', () => musicControl('resume'));
+  document.getElementById('music-skip-btn').addEventListener('click', () => musicControl('skip'));
+  document.getElementById('music-stop-btn').addEventListener('click', () => musicControl('stop'));
+  document.getElementById('music-clearqueue-btn').addEventListener('click', () => musicControl('clear-queue'));
+  document.getElementById('music-volume-btn').addEventListener('click', setMusicVolume);
+  document.getElementById('music-play-btn').addEventListener('click', queueMusicFromDashboard);
+  document.getElementById('music-play-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') queueMusicFromDashboard();
+  });
 
   document.querySelectorAll('[data-template]').forEach((btn) => {
     btn.addEventListener('click', () => sendTemplate(btn.dataset.template));
@@ -1166,6 +1182,8 @@ function refreshEverything() {
   refreshJoinLeaveConfig();
   refreshFeatureToggles();
   refreshTicketConfig();
+  refreshMusicStatus();
+  refreshMusicHistory();
 }
 
 // ---------- Overview ----------
@@ -3658,5 +3676,155 @@ aiForm.addEventListener('submit', async (e) => {
     aiSendBtn.disabled = false;
   }
 });
+
+// ---------- Music ----------
+
+async function refreshMusicSettings() {
+  const res = await api('/api/music/settings');
+  if (!res.ok) return;
+  const { settings, commands } = await res.json();
+  document.getElementById('music-announce').checked = !!settings.announceNowPlaying;
+  document.getElementById('music-default-volume').value = settings.defaultVolume;
+  document.getElementById('music-max-queue').value = settings.maxQueueSize;
+  document.getElementById('music-max-duration').value = Math.round((settings.maxSongDurationSeconds || 0) / 60);
+  document.getElementById('music-idle-timeout').value = settings.idleDisconnectSeconds;
+  document.getElementById('music-voteskip-enabled').checked = !!settings.voteSkipEnabled;
+  document.getElementById('music-voteskip-threshold').value = settings.voteSkipThresholdPercent;
+  renderMusicPermissions(commands, settings.commandPermissions || {});
+}
+
+function renderMusicPermissions(commands, commandPermissions) {
+  const container = document.getElementById('music-permissions-list');
+  container.innerHTML = commands
+    .map(
+      (c) => `
+    <div class="music-perm-item" style="margin-bottom:16px">
+      <div><strong>${escapeHtml(c.label)}</strong> — <span class="muted small">${escapeHtml(c.description)} Default: ${c.defaultOpen ? 'everyone' : 'Administrators only'}.</span></div>
+      <div id="music-perm-${escapeHtml(c.key)}" class="toggle-list scroll-list"></div>
+    </div>`
+    )
+    .join('');
+  commands.forEach((c) => renderCheckboxList(`music-perm-${c.key}`, '/api/roles', commandPermissions[c.key] || [], (r) => r.name));
+}
+
+async function saveMusicSettings() {
+  const feedback = document.getElementById('music-settings-feedback');
+  const patch = {
+    announceNowPlaying: document.getElementById('music-announce').checked,
+    defaultVolume: parseInt(document.getElementById('music-default-volume').value, 10) || 100,
+    maxQueueSize: parseInt(document.getElementById('music-max-queue').value, 10) || 100,
+    maxSongDurationSeconds: (parseInt(document.getElementById('music-max-duration').value, 10) || 0) * 60,
+    idleDisconnectSeconds: parseInt(document.getElementById('music-idle-timeout').value, 10) || 180,
+    voteSkipEnabled: document.getElementById('music-voteskip-enabled').checked,
+    voteSkipThresholdPercent: parseInt(document.getElementById('music-voteskip-threshold').value, 10) || 50,
+  };
+  const res = await api('/api/music/settings', { method: 'POST', body: JSON.stringify(patch) });
+  setFeedback(feedback, res.ok ? 'Saved!' : 'Failed to save.', res.ok);
+  if (res.ok) refreshAuditLog();
+}
+
+async function saveMusicPermissions() {
+  const feedback = document.getElementById('music-permissions-feedback');
+  const res = await api('/api/music/settings');
+  if (!res.ok) return setFeedback(feedback, 'Failed to save.', false);
+  const { commands } = await res.json();
+  const commandPermissions = {};
+  for (const c of commands) commandPermissions[c.key] = getCheckedIds(`music-perm-${c.key}`);
+  const saveRes = await api('/api/music/settings', { method: 'POST', body: JSON.stringify({ commandPermissions }) });
+  setFeedback(feedback, saveRes.ok ? 'Saved!' : 'Failed to save.', saveRes.ok);
+  if (saveRes.ok) refreshAuditLog();
+}
+
+async function refreshMusicStatus() {
+  const el = document.getElementById('music-nowplaying');
+  const queueEl = document.getElementById('music-queue-list');
+  if (!el || !queueEl) return;
+  const res = await api('/api/music/status');
+  if (!res.ok) return;
+  const status = await res.json();
+
+  if (!status.connected || !status.current) {
+    el.innerHTML = '<p class="muted small">Nothing is playing right now.</p>';
+  } else {
+    el.innerHTML = `<p>${status.paused ? '⏸️' : '▶️'} <strong>${escapeHtml(status.current.title)}</strong>${status.current.isAdmin ? ' 👑' : ''} — requested by ${escapeHtml(status.current.requestedByTag || status.current.requestedBy)}</p><p class="muted small">Volume: ${status.volume}% ${status.looping ? '• Looping' : ''}</p>`;
+  }
+
+  if (status.queue.length === 0) {
+    queueEl.innerHTML = '<span class="empty-hint">Nothing queued.</span>';
+  } else {
+    queueEl.innerHTML = status.queue
+      .map(
+        (e, i) => `
+      <div class="list-row">
+        <div class="list-main"><div class="list-title">${i + 1}. ${escapeHtml(e.title)}${e.isAdmin ? ' 👑' : ''}</div></div>
+        <div class="list-actions">
+          <button class="danger-button" data-music-remove="${escapeHtml(e.id)}">Remove</button>
+        </div>
+      </div>`
+      )
+      .join('');
+    queueEl.querySelectorAll('[data-music-remove]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api(`/api/music/queue/${btn.dataset.musicRemove}`, { method: 'DELETE' });
+        refreshMusicStatus();
+      });
+    });
+  }
+}
+
+async function musicControl(action) {
+  const feedback = document.getElementById('music-control-feedback');
+  const res = await api(`/api/music/${action}`, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  setFeedback(feedback, res.ok ? 'Done.' : data.error || 'Failed.', res.ok);
+  refreshMusicStatus();
+}
+
+async function setMusicVolume() {
+  const feedback = document.getElementById('music-control-feedback');
+  const volume = document.getElementById('music-volume-input').value;
+  const res = await api('/api/music/volume', { method: 'POST', body: JSON.stringify({ volume }) });
+  const data = await res.json().catch(() => ({}));
+  setFeedback(feedback, res.ok ? `Volume set to ${data.volume}%.` : data.error || 'Failed.', res.ok);
+}
+
+async function queueMusicFromDashboard() {
+  const feedback = document.getElementById('music-play-feedback');
+  const input = document.getElementById('music-play-input');
+  const query = input.value.trim();
+  if (!query) return;
+  const res = await api('/api/music/play', { method: 'POST', body: JSON.stringify({ query }) });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    setFeedback(feedback, data.startingNow ? `Now playing: ${data.title}` : `Queued at position ${data.position + 1}: ${data.title}`, true);
+    input.value = '';
+    refreshMusicStatus();
+  } else {
+    setFeedback(feedback, data.error || 'Failed.', false);
+  }
+}
+
+async function refreshMusicHistory() {
+  const el = document.getElementById('music-history-list');
+  if (!el) return;
+  const res = await api('/api/music/history');
+  if (!res.ok) return;
+  const entries = await res.json();
+  if (entries.length === 0) {
+    el.innerHTML = '<span class="empty-hint">Nothing played yet.</span>';
+    return;
+  }
+  el.innerHTML = entries
+    .map(
+      (e) => `
+      <div class="list-row">
+        <div class="list-main">
+          <div class="list-title">${escapeHtml(e.title)}${e.isAdmin ? ' 👑' : ''}</div>
+          <div class="muted small">Requested by ${escapeHtml(e.requestedByTag || e.requestedBy)} • ${new Date(e.playedAt).toLocaleString()}</div>
+        </div>
+      </div>`
+    )
+    .join('');
+}
 
 boot();

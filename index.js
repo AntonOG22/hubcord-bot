@@ -24,6 +24,7 @@ const { setupStreamAlerts } = require('./streamAlerts');
 const { setupAiAutomod } = require('./aiAutomod');
 const { preloadAll } = require('./guildStore');
 const { setupBridgeListener } = require('./bridge');
+const { setupMusic } = require('./music');
 
 patchConsole();
 
@@ -44,6 +45,7 @@ const client = new Client({
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates, // required by @discordjs/voice to join/track voice channels for music playback
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction],
 });
@@ -73,6 +75,7 @@ client.once('ready', async () => {
   setupAiAutomod(client);
   verificationGate.setupVerificationGate(client);
   setupBridgeListener(client);
+  setupMusic(client);
 
   setupCommandHandler(client, { client });
 });
