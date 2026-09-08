@@ -3690,6 +3690,7 @@ async function refreshMusicSettings() {
   document.getElementById('music-idle-timeout').value = settings.idleDisconnectSeconds;
   document.getElementById('music-voteskip-enabled').checked = !!settings.voteSkipEnabled;
   document.getElementById('music-voteskip-threshold').value = settings.voteSkipThresholdPercent;
+  document.getElementById('music-lyrics-enabled').checked = !!settings.lyricsEnabled;
   await renderMusicPermissions(commands, settings.commandPermissions || {});
 }
 
@@ -3728,6 +3729,7 @@ async function saveMusicSettings() {
     idleDisconnectSeconds: parseInt(document.getElementById('music-idle-timeout').value, 10) || 180,
     voteSkipEnabled: document.getElementById('music-voteskip-enabled').checked,
     voteSkipThresholdPercent: parseInt(document.getElementById('music-voteskip-threshold').value, 10) || 50,
+    lyricsEnabled: document.getElementById('music-lyrics-enabled').checked,
   };
   const res = await api('/api/music/settings', { method: 'POST', body: JSON.stringify(patch) });
   setFeedback(feedback, res.ok ? 'Saved!' : 'Failed to save.', res.ok);

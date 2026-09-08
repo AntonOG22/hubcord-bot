@@ -78,6 +78,7 @@ const MUSIC_COMMANDS = [
   { key: 'loop', label: '!loop', description: 'Toggle looping the current song.', defaultOpen: false },
   { key: 'automatic', label: '!automatic', description: 'Starts fully automatic playback matching a mood/genre (e.g. "relaxing") — finds and queues songs on its own. While active, only Administrators can use ANY music command, regardless of role grants, until !automaticstop.', defaultOpen: false },
   { key: 'automaticstop', label: '!automaticstop', description: 'Stops automatic playback mode.', defaultOpen: false },
+  { key: 'lyrics', label: '!lyrics', description: 'Shows lyrics for the current song, synced to playback position when available. Can be turned off entirely in Settings below.', defaultOpen: true },
 ];
 
 const AUTOMATIC_BATCH_SIZE = 15; // how many candidates to fetch per search
@@ -97,6 +98,7 @@ const settingsStore = makeGuildStore('music-settings.json', () => ({
   idleDisconnectSeconds: DEFAULT_IDLE_DISCONNECT_SECONDS,
   voteSkipEnabled: true,
   voteSkipThresholdPercent: DEFAULT_VOTE_SKIP_THRESHOLD,
+  lyricsEnabled: true,
 }));
 
 const historyStore = makeGuildStore('music-history.json', () => ({ entries: [] }));
@@ -111,6 +113,7 @@ function getSettings(guildId) {
   if (s.idleDisconnectSeconds === undefined) s.idleDisconnectSeconds = DEFAULT_IDLE_DISCONNECT_SECONDS;
   if (s.voteSkipEnabled === undefined) s.voteSkipEnabled = true;
   if (s.voteSkipThresholdPercent === undefined) s.voteSkipThresholdPercent = DEFAULT_VOTE_SKIP_THRESHOLD;
+  if (s.lyricsEnabled === undefined) s.lyricsEnabled = true;
   return s;
 }
 
@@ -161,6 +164,9 @@ function updateSettings(guildId, patch) {
   }
   if (patch && patch.voteSkipThresholdPercent !== undefined) {
     s.voteSkipThresholdPercent = Math.max(1, Math.min(100, parseInt(patch.voteSkipThresholdPercent, 10) || DEFAULT_VOTE_SKIP_THRESHOLD));
+  }
+  if (patch && patch.lyricsEnabled !== undefined) {
+    s.lyricsEnabled = !!patch.lyricsEnabled;
   }
   settingsStore.save();
   return s;
@@ -345,7 +351,130 @@ async function resolveTrack(query) {
     webpageUrl: picked.webpage_url || (isUrl ? query : null),
     duration: picked.duration || null,
     thumbnail: picked.thumbnail || null,
+    // YouTube Music-tagged uploads carry real artist/track metadata —
+    // far more reliable for a lyrics lookup than guessing from the video
+    // title (which is often "Artist - Track (Official Video) [4K]" but
+    // just as often isn't formatted anything like that).
+    artist: picked.artist || picked.uploader || picked.channel || null,
+    track: picked.track || null,
   };
+}
+
+// Best-effort "Artist" / "Track" split for a lyrics lookup when yt-dlp
+// didn't already give us clean metadata (see resolveTrack). Strips the
+// common "(Official Video)", "[HD]", "(Lyrics)" etc. noise first, then
+// splits on the first " - " / " – " / " — ", which is how most music
+// uploads title themselves.
+function parseArtistTrack(rawTitle) {
+  const cleaned = rawTitle
+    .replace(/[([][^)\]]*\b(official|video|audio|lyrics?|remaster(ed)?|hd|hq|4k|mv|visualizer|explicit|clean)\b[^)\]]*[)\]]/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const parts = cleaned.split(/\s+[-–—]\s+/);
+  if (parts.length >= 2) {
+    return { artist: parts[0].trim(), track: parts.slice(1).join(' - ').trim() };
+  }
+  return { artist: null, track: cleaned || rawTitle };
+}
+
+// lrclib.net: free, keyless, community-sourced lyrics with optional
+// line-synced (LRC) timing — exactly what a "where in the song are we"
+// display needs. Never throws: a lookup failure just means "no lyrics",
+// not a broken command.
+async function fetchLyrics(artist, track) {
+  try {
+    const params = new URLSearchParams({ track_name: track, artist_name: artist || '' });
+    const res = await fetch(`https://lrclib.net/api/search?${params}`, {
+      headers: { 'User-Agent': 'hubcord-bot (Discord music lyrics lookup)' },
+    });
+    if (!res.ok) return null;
+    const results = await res.json();
+    if (!Array.isArray(results) || results.length === 0) return null;
+    // Prefer a result that actually has line-synced timing over a plain-
+    // text-only match further down the (relevance-ranked) list.
+    const best = results.find((r) => r.syncedLyrics) || results[0];
+    if (!best.syncedLyrics && !best.plainLyrics) return null;
+    return { syncedLyrics: best.syncedLyrics || null, plainLyrics: best.plainLyrics || null };
+  } catch {
+    return null;
+  }
+}
+
+const LRC_LINE_RE = /^\[(\d{2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/;
+
+function parseSyncedLyrics(lrc) {
+  const lines = [];
+  for (const raw of lrc.split('\n')) {
+    const m = raw.match(LRC_LINE_RE);
+    if (!m) continue;
+    const ms = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) : 0;
+    lines.push({ timeMs: parseInt(m[1], 10) * 60000 + parseInt(m[2], 10) * 1000 + ms, text: m[4].trim() });
+  }
+  return lines;
+}
+
+// A short window of lines centered on the current playback position, with
+// the active line bolded and arrowed — the "karaoke" effect. Falls back to
+// the very start if playback position is somehow before the first line.
+function buildSyncedLyricsWindow(lines, elapsedMs, radius = 4) {
+  let idx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].timeMs <= elapsedMs) idx = i;
+    else break;
+  }
+  const start = Math.max(0, idx - radius);
+  const end = Math.min(lines.length, idx + radius + 1);
+  return lines
+    .slice(start, end)
+    .map((l, i) => {
+      const text = l.text || '♪';
+      return start + i === idx ? `**▶ ${text}**` : text;
+    })
+    .join('\n');
+}
+
+async function buildLyricsEmbed(guildId) {
+  const state = getState(guildId);
+  const entry = state.current;
+  if (!entry) return null;
+
+  const settings = getSettings(guildId);
+  const embed = new EmbedBuilder().setColor(0x3ecf8e).setFooter(brandFooter(clientRef, guildId));
+  const displayTitle = entry.title || entry.query;
+
+  if (!settings.lyricsEnabled) {
+    embed.setTitle(`🎤 ${displayTitle}`).setDescription('Lyrics are turned off on this server.');
+    return embed;
+  }
+
+  const guess = parseArtistTrack(displayTitle);
+  const artist = entry.artist || guess.artist;
+  const track = entry.track || guess.track;
+
+  const lyrics = await fetchLyrics(artist, track);
+  if (entry.thumbnail) embed.setThumbnail(entry.thumbnail);
+  if (entry.webpageUrl) embed.setURL(entry.webpageUrl);
+
+  if (!lyrics) {
+    embed.setTitle(`🎤 ${displayTitle}`).setDescription('Lyrics is not available for this song.');
+    return embed;
+  }
+
+  if (lyrics.syncedLyrics) {
+    const lines = parseSyncedLyrics(lyrics.syncedLyrics);
+    const elapsedMs = getElapsedMs(state);
+    embed
+      .setTitle(`🎤 ${displayTitle}`)
+      .setDescription(buildSyncedLyricsWindow(lines, elapsedMs))
+      .addFields({ name: 'Position', value: buildProgressBar(elapsedMs / 1000, entry.duration) });
+    return embed;
+  }
+
+  // Plain (unsynced) lyrics — Discord embed descriptions cap at 4096
+  // characters; nearly every song fits, but trim safely just in case.
+  const plain = lyrics.plainLyrics.length > 3900 ? lyrics.plainLyrics.slice(0, 3900) + '\n…' : lyrics.plainLyrics;
+  embed.setTitle(`🎤 ${displayTitle}`).setDescription(plain || 'Lyrics is not available for this song.');
+  return embed;
 }
 
 // Spawns ffmpeg to transcode the resolved stream URL to raw PCM on stdout —
@@ -524,6 +653,13 @@ async function playNext(guildId) {
     resource.volume.setVolume((state.volume ?? getSettings(guildId).defaultVolume) / 100);
     state.currentResource = resource;
     state.player.play(resource);
+
+    // Playback-position tracking, for !nowplaying's progress bar and
+    // !lyrics' current-line sync. pausedAccumMs/pausedSince (see pause()/
+    // resume()) subtract out any time spent paused.
+    next.playbackStartedAt = Date.now();
+    next.pausedAccumMs = 0;
+    state.pausedSince = null;
 
     if (getSettings(guildId).announceNowPlaying && state.textChannelId && clientRef) {
       const channel = await clientRef.channels.fetch(state.textChannelId).catch(() => null);
@@ -769,13 +905,47 @@ function voteSkip(guildId, member, voiceChannelMemberCount) {
 function pause(guildId) {
   const state = getState(guildId);
   if (!state.player || state.player.state.status !== AudioPlayerStatus.Playing) return false;
-  return state.player.pause();
+  const ok = state.player.pause();
+  if (ok) state.pausedSince = Date.now();
+  return ok;
 }
 
 function resume(guildId) {
   const state = getState(guildId);
   if (!state.player || state.player.state.status !== AudioPlayerStatus.Paused) return false;
-  return state.player.unpause();
+  const ok = state.player.unpause();
+  if (ok && state.pausedSince && state.current) {
+    state.current.pausedAccumMs = (state.current.pausedAccumMs || 0) + (Date.now() - state.pausedSince);
+    state.pausedSince = null;
+  }
+  return ok;
+}
+
+// Milliseconds into the current track, net of any time spent paused.
+function getElapsedMs(state) {
+  if (!state.current || !state.current.playbackStartedAt) return 0;
+  let elapsed = Date.now() - state.current.playbackStartedAt - (state.current.pausedAccumMs || 0);
+  if (state.pausedSince) elapsed -= Date.now() - state.pausedSince;
+  return Math.max(0, elapsed);
+}
+
+function formatClock(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return (h > 0 ? `${h}:` : '') + `${mm}:${String(sec).padStart(2, '0')}`;
+}
+
+// A little text progress bar, e.g. "02:14 ▬▬▬▬▬●▬▬▬▬▬▬▬▬ 05:12".
+function buildProgressBar(elapsedSeconds, totalSeconds) {
+  if (!totalSeconds || totalSeconds <= 0) return `${formatClock(elapsedSeconds)} (live/unknown length)`;
+  const barLength = 18;
+  const ratio = Math.max(0, Math.min(1, elapsedSeconds / totalSeconds));
+  const filled = Math.round(ratio * barLength);
+  const bar = '▬'.repeat(filled) + '●' + '▬'.repeat(Math.max(0, barLength - filled));
+  return `${formatClock(elapsedSeconds)} ${bar} ${formatClock(totalSeconds)}`;
 }
 
 function stop(guildId) {
@@ -834,7 +1004,9 @@ function getStatus(guildId) {
     voiceChannelId: state.connection ? state.connection.joinConfig.channelId : null,
     playing: !!state.player && state.player.state.status === AudioPlayerStatus.Playing,
     paused: !!state.player && state.player.state.status === AudioPlayerStatus.Paused,
-    current: state.current ? formatEntry(state.current) : null,
+    current: state.current
+      ? { ...formatEntry(state.current), thumbnail: state.current.thumbnail || null, duration: state.current.duration || null, elapsedSeconds: Math.round(getElapsedMs(state) / 1000) }
+      : null,
     queue: state.queue.map(formatEntry),
     volume: state.volume ?? getSettings(guildId).defaultVolume,
     looping: state.looping,
@@ -870,4 +1042,7 @@ module.exports = {
   toggleLoop,
   getStatus,
   getHistory,
+  buildLyricsEmbed,
+  buildProgressBar,
+  getElapsedMs,
 };

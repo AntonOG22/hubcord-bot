@@ -1307,13 +1307,35 @@ cmd({
 
 cmd({
   name: 'nowplaying', aliases: ['np', 'current'], category: 'Music', permission: null,
-  usage: '', description: 'Shows what song is currently playing.',
+  usage: '', description: 'Shows what song is currently playing, with a thumbnail and a playback-position progress bar.',
   run: async (message) => {
     music.requirePermission(message.guild.id, 'nowplaying', message.member);
     music.requireVoiceChatChannel(message);
     const status = music.getStatus(message.guild.id);
     if (!status.current) return 'Nothing is playing right now.';
-    return `▶️ **${status.current.title}** — requested by <@${status.current.requestedBy}>${status.paused ? ' (paused)' : ''}`;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x3ecf8e)
+      .setTitle(`${status.paused ? '⏸️' : '▶️'} ${status.current.title}`)
+      .setDescription(music.buildProgressBar(status.current.elapsedSeconds, status.current.duration))
+      .addFields({ name: 'Requested by', value: status.current.requestedByTag || `<@${status.current.requestedBy}>`, inline: true })
+      .setFooter(brandFooter(message.client, message.guild.id));
+    if (status.current.thumbnail) embed.setThumbnail(status.current.thumbnail);
+    await message.channel.send({ embeds: [embed] });
+    return null;
+  },
+});
+
+cmd({
+  name: 'lyrics', aliases: ['ly'], category: 'Music', permission: null,
+  usage: '', description: "Shows lyrics for the current song, synced to playback position (with the current line highlighted) when available — falls back to plain lyrics, or \"Lyrics is not available\" if nothing is found. Can be turned off entirely in the dashboard's Music tab.",
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'lyrics', message.member);
+    music.requireVoiceChatChannel(message);
+    const embed = await music.buildLyricsEmbed(message.guild.id);
+    if (!embed) return 'Nothing is playing right now.';
+    await message.channel.send({ embeds: [embed] });
+    return null;
   },
 });
 

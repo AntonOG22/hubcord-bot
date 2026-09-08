@@ -887,6 +887,14 @@
             <label class="field-label" for="music-voteskip-threshold">Vote-skip threshold (% of voice channel members)</label>
             <input id="music-voteskip-threshold" type="number" min="1" max="100" value="50" />
 
+            <div class="toggle-row" style="margin-top:16px">
+              <span class="toggle-label">Lyrics (<code>!lyrics</code>) <span class="muted small">— synced to playback position when available, via lrclib.net</span></span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="music-lyrics-enabled" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
             <button id="music-settings-save-btn" class="primary-button" style="margin-top:12px">Save Settings</button>
             <p id="music-settings-feedback" class="feedback-text"></p>
           </section>
