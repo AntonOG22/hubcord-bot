@@ -3690,21 +3690,32 @@ async function refreshMusicSettings() {
   document.getElementById('music-idle-timeout').value = settings.idleDisconnectSeconds;
   document.getElementById('music-voteskip-enabled').checked = !!settings.voteSkipEnabled;
   document.getElementById('music-voteskip-threshold').value = settings.voteSkipThresholdPercent;
-  renderMusicPermissions(commands, settings.commandPermissions || {});
+  await renderMusicPermissions(commands, settings.commandPermissions || {});
 }
 
-function renderMusicPermissions(commands, commandPermissions) {
+// One compact multi-select per command (roles fetched once and reused for
+// all of them) instead of a full checkbox list repeated 13 times — same
+// "pick one or more roles" control already used elsewhere in the dashboard
+// (ctrl/cmd-click or shift-click to select multiple), just far less
+// vertical space than a scroll-list toggle-row per role per command.
+async function renderMusicPermissions(commands, commandPermissions) {
   const container = document.getElementById('music-permissions-list');
+  const res = await api('/api/roles');
+  const roles = res.ok ? await res.json() : [];
+
   container.innerHTML = commands
-    .map(
-      (c) => `
-    <div class="music-perm-item" style="margin-bottom:16px">
-      <div><strong>${escapeHtml(c.label)}</strong> — <span class="muted small">${escapeHtml(c.description)} Default: ${c.defaultOpen ? 'everyone' : 'Administrators only'}.</span></div>
-      <div id="music-perm-${escapeHtml(c.key)}" class="toggle-list scroll-list"></div>
-    </div>`
-    )
+    .map((c) => {
+      const selected = new Set(commandPermissions[c.key] || []);
+      const options = roles
+        .map((r) => `<option value="${escapeHtml(r.id)}" ${selected.has(r.id) ? 'selected' : ''}>${escapeHtml(r.name)}</option>`)
+        .join('');
+      return `
+      <div class="row music-perm-row" title="${escapeHtml(c.description)}">
+        <span class="music-perm-label">${c.defaultOpen ? '' : '🔒 '}<code>${escapeHtml(c.label)}</code></span>
+        <select id="music-perm-${escapeHtml(c.key)}" multiple size="3">${options}</select>
+      </div>`;
+    })
     .join('');
-  commands.forEach((c) => renderCheckboxList(`music-perm-${c.key}`, '/api/roles', commandPermissions[c.key] || [], (r) => r.name));
 }
 
 async function saveMusicSettings() {
@@ -3729,7 +3740,10 @@ async function saveMusicPermissions() {
   if (!res.ok) return setFeedback(feedback, 'Failed to save.', false);
   const { commands } = await res.json();
   const commandPermissions = {};
-  for (const c of commands) commandPermissions[c.key] = getCheckedIds(`music-perm-${c.key}`);
+  for (const c of commands) {
+    const select = document.getElementById(`music-perm-${c.key}`);
+    commandPermissions[c.key] = select ? [...select.selectedOptions].map((o) => o.value) : [];
+  }
   const saveRes = await api('/api/music/settings', { method: 'POST', body: JSON.stringify({ commandPermissions }) });
   setFeedback(feedback, saveRes.ok ? 'Saved!' : 'Failed to save.', saveRes.ok);
   if (saveRes.ok) refreshAuditLog();

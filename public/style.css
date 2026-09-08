@@ -1153,6 +1153,22 @@ input[type="radio"]:checked::after {
   margin-top: 2px;
 }
 
+/* ---------- Music command permissions (compact multi-select per row) ---------- */
+
+.music-perm-row {
+  align-items: center;
+  margin-top: 8px;
+}
+
+.music-perm-label {
+  flex: 0 0 180px;
+  font-size: 0.85em;
+}
+
+.music-perm-row select[multiple] {
+  min-height: 62px;
+}
+
 /* ---------- Toggle list (auto-mod settings, commands) ---------- */
 
 .toggle-list {

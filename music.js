@@ -426,8 +426,11 @@ async function playNext(guildId) {
     next.duration = track.duration;
     next.webpageUrl = track.webpageUrl;
 
+    // Automatic mode picks are exempt — mood searches (esp. "relaxing"/
+    // "sleep"/"lofi") routinely turn up genuinely long mixes, and skipping
+    // those would defeat the entire point of a hands-off session.
     const maxDuration = getSettings(guildId).maxSongDurationSeconds;
-    if (maxDuration > 0 && track.duration && track.duration > maxDuration) {
+    if (!next.isAutomatic && maxDuration > 0 && track.duration && track.duration > maxDuration) {
       if (state.textChannelId && clientRef) {
         clientRef.channels.fetch(state.textChannelId)
           .then((ch) => ch?.send(`⏭️ Skipping **${track.title}** — longer than the ${Math.round(maxDuration / 60)}-minute limit set for this server.`))
