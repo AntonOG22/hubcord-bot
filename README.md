@@ -32,12 +32,15 @@ Requires a Discord Application with:
 
 ### Music
 
-`!musik <name or link>` plays audio in a voice channel — resolved via
-`yt-dlp-exec` (downloads its own `yt-dlp` binary on `npm install`, no system
-install needed), transcoded with `ffmpeg-static` (bundles its own `ffmpeg`
-binary too), and Opus-encoded with `opusscript` (pure JS, no native build
-step) — so no extra system packages or build tools are required on
-Render/Railway, and `npm install` works the same on any host including
+`!musik <name or link>` plays audio in a voice channel — resolved via a
+standalone `yt-dlp` binary (downloaded straight from GitHub releases by
+`scripts/download-yt-dlp.js` on `npm install`; deliberately not the
+`yt-dlp-exec` npm package, whose own preinstall hard-requires a `python`
+binary in the build image just for a leftover version-check, which broke
+the very first Railway build), transcoded with `ffmpeg-static` (bundles its
+own `ffmpeg` binary), and Opus-encoded with `opusscript` (pure JS, no
+native build step). No extra system packages or build tools are required
+on Render/Railway, and `npm install` works the same on any host including
 plain Windows dev machines with no C++ build tools installed. (A native
 encoder like `@discordjs/opus` is faster, but needs node-gyp + a C++
 toolchain at install time — not worth the deploy fragility here.)

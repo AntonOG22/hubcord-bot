@@ -14,7 +14,8 @@
 // to a channel with no way to actually resume mid-song anyway. A restart
 // just means the bot rejoins fresh next time someone runs !musik.
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const path = require('path');
+const { spawn, execFile } = require('child_process');
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -25,11 +26,14 @@ const {
   StreamType,
 } = require('@discordjs/voice');
 const ffmpegPath = require('ffmpeg-static');
-const ytdlp = require('yt-dlp-exec');
 const { EmbedBuilder, ChannelType } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { brandFooter } = require('./brand');
 const features = require('./features');
+
+// Downloaded by scripts/download-yt-dlp.js on `npm install` (see that file
+// for why it's a plain Node script instead of the yt-dlp-exec package).
+const YTDLP_PATH = path.join(__dirname, 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 const YOUTUBE_REGEX = /(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)[\w-]+/i;
 
@@ -222,20 +226,29 @@ function killFfmpeg(state) {
 
 // ---------- yt-dlp / ffmpeg plumbing ----------
 
+function runYtdlp(args) {
+  return new Promise((resolve, reject) => {
+    execFile(YTDLP_PATH, args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error((stderr || err.message || '').trim().split('\n').pop() || 'yt-dlp failed'));
+      resolve(stdout);
+    });
+  });
+}
+
 async function resolveTrack(query) {
   const isUrl = YOUTUBE_REGEX.test(query);
   const target = isUrl ? query : `ytsearch1:${query}`;
 
-  const raw = await ytdlp(target, {
-    dumpSingleJson: true,
-    noPlaylist: true,
-    defaultSearch: 'auto',
-    noCheckCertificates: true,
-    noWarnings: true,
-    preferFreeFormats: true,
-    format: 'bestaudio/best',
-  });
-  const info = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const stdout = await runYtdlp([
+    '--dump-single-json',
+    '--no-playlist',
+    '--no-check-certificates',
+    '--no-warnings',
+    '--prefer-free-formats',
+    '-f', 'bestaudio/best',
+    target,
+  ]);
+  const info = JSON.parse(stdout);
   const picked = info && info.entries ? info.entries[0] : info;
   if (!picked || !picked.url) throw new Error(`No results found for "${query}".`);
 

@@ -7,7 +7,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "node scripts/download-yt-dlp.js"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
@@ -20,7 +21,6 @@
     "helmet": "^8.3.0",
     "libsodium-wrappers": "^0.8.4",
     "multer": "^2.2.0",
-    "opusscript": "^0.1.1",
-    "yt-dlp-exec": "^1.0.2"
+    "opusscript": "^0.1.1"
   }
 }
