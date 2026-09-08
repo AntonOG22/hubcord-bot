@@ -576,6 +576,19 @@ async function playNext(guildId) {
     || state.connection?.joinConfig.channelId === state.automatic.homeChannelId;
 
   let next = state.queue.shift();
+
+  // The queue can already contain leftover automatic picks from before an
+  // admin's request pulled the bot to a different channel (they were
+  // queued while still at home, then never got a turn). Away from home,
+  // those don't get to play — put it back untouched and treat the queue as
+  // empty for this turn, so it falls through to scheduleIdleDisconnect's
+  // 30s return-home timer instead of leaking automatic-mode music into
+  // whatever channel a request happened to be answered in.
+  if (next && next.isAutomatic && state.automatic?.active && !atAutomaticHome) {
+    state.queue.unshift(next);
+    next = undefined;
+  }
+
   if (!next && state.automatic?.active && atAutomaticHome) {
     await refillAutomaticQueue(guildId);
     next = state.queue.shift();
