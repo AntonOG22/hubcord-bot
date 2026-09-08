@@ -76,7 +76,12 @@ const MUSIC_COMMANDS = [
   { key: 'remove', label: '!musicremove', description: 'Remove a specific song from the queue.', defaultOpen: false },
   { key: 'volume', label: '!volume', description: 'Change the playback volume.', defaultOpen: false },
   { key: 'loop', label: '!loop', description: 'Toggle looping the current song.', defaultOpen: false },
+  { key: 'automatic', label: '!automatic', description: 'Starts fully automatic playback matching a mood/genre (e.g. "relaxing") — finds and queues songs on its own. While active, only Administrators can use ANY music command, regardless of role grants, until !automaticstop.', defaultOpen: false },
+  { key: 'automaticstop', label: '!automaticstop', description: 'Stops automatic playback mode.', defaultOpen: false },
 ];
+
+const AUTOMATIC_BATCH_SIZE = 8; // how many candidates to fetch per search
+const AUTOMATIC_REFILL_AHEAD = 2; // refill once fewer than this many automatic tracks remain queued
 
 const DEFAULT_IDLE_DISCONNECT_SECONDS = 180;
 const DEFAULT_VOTE_SKIP_THRESHOLD = 50;
@@ -186,7 +191,19 @@ function canUseMusicCommand(guildId, key, member) {
   return !!(def && def.defaultOpen);
 }
 
+// While automatic mode is running, ONLY real Discord Administrators may
+// touch music at all — a role granted !skip or !musik from the dashboard
+// does not carry over, by design: automatic mode is meant as a hard "hands
+// off, admins only" switch, not just another permission tier.
+function assertNotBlockedByAutomatic(guildId, member) {
+  const automatic = getState(guildId).automatic;
+  if (automatic?.active && !member.permissions.has('Administrator')) {
+    throw new Error(`🔒 Automatic mode ("${automatic.mood}") is active — only Administrators can use music commands right now. An admin can stop it with !automaticstop.`);
+  }
+}
+
 function requirePermission(guildId, key, member) {
+  assertNotBlockedByAutomatic(guildId, member);
   if (!canUseMusicCommand(guildId, key, member)) {
     throw new Error("You don't have permission to use this music command.");
   }
@@ -211,6 +228,7 @@ function getState(guildId) {
       looping: false,
       ffmpegProc: null,
       idleTimer: null,
+      automatic: null, // { active, mood, startedBy, seen: Set<videoId> } while automatic mode is running
     };
     guildStates.set(guildId, state);
   }
@@ -378,7 +396,21 @@ async function playNext(guildId) {
     state.queue.unshift({ ...state.current, id: crypto.randomUUID() });
   }
 
-  const next = state.queue.shift();
+  let next = state.queue.shift();
+  if (!next && state.automatic?.active) {
+    await refillAutomaticQueue(guildId);
+    next = state.queue.shift();
+    if (!next && state.textChannelId && clientRef) {
+      // Genuinely found nothing (bad/too-narrow mood, or a transient search
+      // failure) — automatic mode can't spin forever with no results, so it
+      // switches itself off instead of the bot silently sitting connected
+      // and doing nothing forever.
+      state.automatic = null;
+      clientRef.channels.fetch(state.textChannelId)
+        .then((ch) => ch?.send("🔀 Automatic mode stopped — couldn't find any more results."))
+        .catch(() => {});
+    }
+  }
   if (!next) {
     state.current = null;
     scheduleIdleDisconnect(guildId);
@@ -453,6 +485,16 @@ async function playNext(guildId) {
         await channel.send({ embeds: [embed] }).catch(() => {});
       }
     }
+
+    // Top the queue back up in the background once it's running low, so
+    // playback doesn't visibly stall waiting on a search every single time
+    // it happens to run dry — this fires "ahead of time" instead.
+    if (state.automatic?.active) {
+      const automaticQueued = state.queue.filter((e) => e.isAutomatic).length;
+      if (automaticQueued < AUTOMATIC_REFILL_AHEAD) {
+        refillAutomaticQueue(guildId).catch((err) => console.error(`Automatic mode refill failed for guild ${guildId}:`, err.message));
+      }
+    }
   } catch (err) {
     if (state.textChannelId && clientRef) {
       clientRef.channels.fetch(state.textChannelId)
@@ -470,6 +512,7 @@ async function enqueue(message, query) {
     throw new Error('Music is currently disabled on this server.');
   }
   requireVoiceChatChannel(message);
+  assertNotBlockedByAutomatic(message.guild.id, message.member); // also covers the dashboard's "Play from Dashboard", which calls enqueue() directly, not through requirePermission
   const settings = getSettings(message.guild.id);
 
   const isAdmin = message.member.permissions.has('Administrator');
@@ -520,6 +563,106 @@ async function enqueue(message, query) {
   return { entry, position: state.queue.length - 1, startingNow: false };
 }
 
+// ---------- Automatic mode ----------
+// !automatic <mood/genre> starts a fully hands-off session: an initial
+// batch of matching videos is queued, then topped up automatically as it
+// plays (see the two refillAutomaticQueue() call sites in playNext()).
+// Entries are tagged isAdmin: false (never isAutomatic ones jump the
+// queue), so a real admin manually queuing something via !musik still
+// correctly cuts in front of them — automatic mode fills gaps, it doesn't
+// override real requests.
+
+async function refillAutomaticQueue(guildId) {
+  const state = getState(guildId);
+  if (!state.automatic?.active) return;
+
+  const settings = getSettings(guildId);
+  if (state.queue.length >= settings.maxQueueSize) return;
+
+  let stdout;
+  try {
+    // --flat-playlist: a fast, lightweight search (id/title/url only, no
+    // per-video format resolution) — the full stream info for each one is
+    // only fetched later, lazily, by resolveTrack() when it's actually
+    // about to play, same as every other queue entry.
+    stdout = await runYtdlp([
+      '--dump-single-json',
+      '--flat-playlist',
+      '--no-warnings',
+      '--no-check-certificates',
+      `ytsearch${AUTOMATIC_BATCH_SIZE}:${state.automatic.mood} music`,
+    ]);
+  } catch (err) {
+    console.error(`Automatic mode search failed for guild ${guildId}:`, err.message);
+    return;
+  }
+
+  let info;
+  try {
+    info = JSON.parse(stdout);
+  } catch {
+    return;
+  }
+  const candidates = (info.entries || []).filter((e) => e && e.id && e.url && !state.automatic.seen.has(e.id));
+
+  // Shuffle (Fisher-Yates) so repeated refills don't always play the same
+  // search-ranked order, and so back-to-back automatic sessions don't feel
+  // identical for the same mood.
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+
+  const room = Math.max(0, settings.maxQueueSize - state.queue.length);
+  for (const c of candidates.slice(0, room)) {
+    state.automatic.seen.add(c.id);
+    state.queue.push({
+      id: crypto.randomUUID(),
+      query: c.url,
+      title: c.title || null, // shown in !queue immediately, refined once actually resolved
+      requestedBy: state.automatic.startedBy,
+      requestedByTag: `Automatic mode (${state.automatic.mood})`,
+      isAdmin: false,
+      isAutomatic: true,
+      addedAt: Date.now(),
+    });
+  }
+}
+
+async function startAutomatic(message, mood) {
+  if (!features.isEnabled(message.guild.id, 'music')) {
+    throw new Error('Music is currently disabled on this server.');
+  }
+  requireVoiceChatChannel(message);
+  const state = await ensureConnection(message);
+  if (state.automatic?.active) {
+    throw new Error(`Automatic mode is already running ("${state.automatic.mood}") — use !automaticstop first to change it.`);
+  }
+
+  state.automatic = { active: true, mood, startedBy: message.author.id, seen: new Set() };
+  await refillAutomaticQueue(message.guild.id);
+  if (state.queue.length === 0) {
+    state.automatic = null;
+    throw new Error(`Couldn't find anything for "${mood}" — try a different mood or genre.`);
+  }
+
+  const busy = state.player && (state.player.state.status === AudioPlayerStatus.Playing || state.player.state.status === AudioPlayerStatus.Buffering);
+  if (!busy) await playNext(message.guild.id);
+  return state.automatic;
+}
+
+// Stops the auto-refill and drops any not-yet-played automatic-sourced
+// entries (a stale backlog for a mood nobody asked to keep). The currently
+// playing track (if it happens to be an automatic one) and anything a real
+// admin queued via !musik are left alone.
+function stopAutomatic(guildId) {
+  const state = getState(guildId);
+  if (!state.automatic?.active) return false;
+  state.automatic = null;
+  state.queue = state.queue.filter((e) => !e.isAutomatic);
+  return true;
+}
+
 function skip(guildId) {
   const state = getState(guildId);
   if (!state.player) return false;
@@ -531,12 +674,14 @@ function skip(guildId) {
 // command's own role permissions — the point is a democratic fallback when
 // skip is locked to admins/DJs and none are around. One vote per user per
 // song (state.voteSkips is reset in playNext whenever a new track starts).
-function voteSkip(guildId, userId, voiceChannelMemberCount) {
+function voteSkip(guildId, member, voiceChannelMemberCount) {
+  assertNotBlockedByAutomatic(guildId, member); // voteskip deliberately bypasses canUseMusicCommand's role gate, but not this one
   const state = getState(guildId);
   if (!state.current) throw new Error('Nothing is playing.');
   const settings = getSettings(guildId);
   if (!settings.voteSkipEnabled) throw new Error('Vote-skip is turned off on this server — ask someone with permission to use !skip.');
   if (!state.voteSkips) state.voteSkips = new Set();
+  const userId = member.id;
   if (state.voteSkips.has(userId)) throw new Error('You already voted to skip this song.');
   state.voteSkips.add(userId);
   const needed = Math.max(1, Math.ceil((Math.max(1, voiceChannelMemberCount) * settings.voteSkipThresholdPercent) / 100));
@@ -619,6 +764,7 @@ function getStatus(guildId) {
     queue: state.queue.map(formatEntry),
     volume: state.volume ?? getSettings(guildId).defaultVolume,
     looping: state.looping,
+    automatic: state.automatic?.active ? { mood: state.automatic.mood, startedBy: state.automatic.startedBy } : null,
   };
 }
 
@@ -637,6 +783,8 @@ module.exports = {
   requireVoiceChatChannel,
   isActive,
   enqueue,
+  startAutomatic,
+  stopAutomatic,
   skip,
   voteSkip,
   pause,

@@ -1337,7 +1337,7 @@ cmd({
     if (!music.isActive(message.guild.id)) return 'Nothing is playing.';
     const voiceChannel = message.guild.members.me?.voice?.channel;
     const memberCount = voiceChannel ? voiceChannel.members.filter((m) => !m.user.bot).size : 1;
-    const result = music.voteSkip(message.guild.id, message.author.id, memberCount);
+    const result = music.voteSkip(message.guild.id, message.member, memberCount);
     return result.skipped
       ? `⏭️ Vote passed (${result.votes}/${result.needed}) — skipped!`
       : `🗳️ Vote to skip: **${result.votes}/${result.needed}** needed.`;
@@ -1421,6 +1421,28 @@ cmd({
     music.requireVoiceChatChannel(message);
     const looping = music.toggleLoop(message.guild.id);
     return looping ? '🔁 Looping is now ON.' : '🔁 Looping is now OFF.';
+  },
+});
+
+cmd({
+  name: 'automatic', aliases: ['autoplay'], category: 'Music', permission: null,
+  usage: '<mood or genre, e.g. relaxing>', description: 'Starts fully automatic playback matching a mood/genre — finds and queues songs on its own, topping up as it goes. While running, ONLY Administrators can use any music command (role grants don\'t apply) until !automaticstop. Admins can still queue their own songs with !musik in the meantime — those play ahead of the automatic picks. Admin-only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message, args) => {
+    music.requirePermission(message.guild.id, 'automatic', message.member);
+    const mood = args.join(' ').trim();
+    if (!mood) throw new Error('Tell me what kind of music, e.g. `!automatic relaxing` or `!automatic hype gaming music`.');
+    await music.startAutomatic(message, mood);
+    return `🔀 Automatic mode started: **${mood}**. Only admins can control music until \`!automaticstop\`.`;
+  },
+});
+
+cmd({
+  name: 'automaticstop', aliases: ['autoplaystop'], category: 'Music', permission: null,
+  usage: '', description: 'Stops automatic playback mode. Admin-only by default — configurable in the dashboard\'s Music tab.',
+  run: async (message) => {
+    music.requirePermission(message.guild.id, 'automaticstop', message.member);
+    const stopped = music.stopAutomatic(message.guild.id);
+    return stopped ? '🔀 Automatic mode stopped.' : "Automatic mode isn't running.";
   },
 });
 

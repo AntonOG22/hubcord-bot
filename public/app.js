@@ -3743,10 +3743,14 @@ async function refreshMusicStatus() {
   if (!res.ok) return;
   const status = await res.json();
 
+  const automaticBanner = status.automatic
+    ? `<p class="feedback-text ok">🔀 Automatic mode running: <strong>${escapeHtml(status.automatic.mood)}</strong> — only admins can control music (<code>!automaticstop</code> to end it).</p>`
+    : '';
+
   if (!status.connected || !status.current) {
-    el.innerHTML = '<p class="muted small">Nothing is playing right now.</p>';
+    el.innerHTML = automaticBanner + '<p class="muted small">Nothing is playing right now.</p>';
   } else {
-    el.innerHTML = `<p>${status.paused ? '⏸️' : '▶️'} <strong>${escapeHtml(status.current.title)}</strong>${status.current.isAdmin ? ' 👑' : ''} — requested by ${escapeHtml(status.current.requestedByTag || status.current.requestedBy)}</p><p class="muted small">Volume: ${status.volume}% ${status.looping ? '• Looping' : ''}</p>`;
+    el.innerHTML = automaticBanner + `<p>${status.paused ? '⏸️' : '▶️'} <strong>${escapeHtml(status.current.title)}</strong>${status.current.isAdmin ? ' 👑' : ''} — requested by ${escapeHtml(status.current.requestedByTag || status.current.requestedBy)}</p><p class="muted small">Volume: ${status.volume}% ${status.looping ? '• Looping' : ''}</p>`;
   }
 
   if (status.queue.length === 0) {
