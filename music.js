@@ -293,6 +293,15 @@ async function returnToAutomaticHome(guildId) {
 
   state.textChannelId = homeTextChannelId || state.textChannelId;
   clearIdleTimer(state);
+
+  // The usual case: ensureConnection paused the automatic track in place
+  // before leaving home (see there) — pick it back up from exactly that
+  // position rather than treating it as finished and skipping ahead.
+  if (state.current?.isAutomatic && state.player?.state.status === AudioPlayerStatus.Paused) {
+    resume(guildId);
+    return;
+  }
+
   if (!state.current) {
     await refillAutomaticQueue(guildId);
     await playNext(guildId);
@@ -549,6 +558,18 @@ async function ensureConnection(message) {
 
     await entersState(state.connection, VoiceConnectionStatus.Ready, 15_000);
   } else if (state.connection.joinConfig.channelId !== voiceChannel.id) {
+    // Leaving automatic mode's home channel with something actively
+    // playing there — pause it (not skip it, not let it keep streaming
+    // into the channel we're moving to) so it picks back up from exactly
+    // this position once the bot returns home. See returnToAutomaticHome.
+    if (
+      state.automatic?.active &&
+      state.connection.joinConfig.channelId === state.automatic.homeChannelId &&
+      state.current?.isAutomatic &&
+      state.player?.state.status === AudioPlayerStatus.Playing
+    ) {
+      pause(message.guild.id);
+    }
     state.connection.rejoin({ channelId: voiceChannel.id, guildId: message.guild.id, selfDeaf: true, adapterCreator: message.guild.voiceAdapterCreator });
   }
 
