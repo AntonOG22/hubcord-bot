@@ -402,55 +402,75 @@ const MISSING_POT_ARGS = ['--extractor-args', 'youtube:formats=missing_pot'];
 // line up with the current auth state, and YouTube's own known "reload"
 // bug for specific client/cookie combinations.
 function isRetryableClientError(message) {
-  return /sign in to confirm|requested format is not available|page needs to be reloaded/i.test(message || '');
+  return /sign in to confirm|requested format is not available|page needs to be reloaded|timed? ?out|econnreset|econnrefused|network|fetch failed|http error 5\d\d|503|502/i.test(message || '');
 }
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Every one of isRetryableClientError's cases is documented/reported as
+// intermittent, not deterministic — the exact same request (same client,
+// same cookies) frequently just succeeds on a second try a moment later.
+// A single pass through the client list treated one bad roll of the dice
+// per client as "that client is broken" and moved on; retrying each one
+// RETRIES_PER_CLIENT times first (with a short pause in between) catches
+// the very common case where every client "fails" once but any of them
+// would've worked on attempt two.
+const RETRIES_PER_CLIENT = 2;
+const RETRY_DELAY_MS = 1500;
 
 async function resolveTrack(query) {
   const isUrl = YOUTUBE_REGEX.test(query);
   const target = isUrl ? query : `ytsearch1:${query}`;
 
-  // The last attempt pairs missing_pot with whichever client the previous
-  // attempt used, instead of yet another fresh client — by that point every
+  // The last client pairs missing_pot with whichever one the previous
+  // entry used, instead of yet another fresh client — by that point every
   // real client has already been tried, so what's left worth trying is
   // "same client, but stop hiding PO-token-gated formats" rather than a 5th
   // client rotation.
-  const attempts = [...YTDLP_CLIENT_FALLBACKS, YTDLP_CLIENT_FALLBACKS[YTDLP_CLIENT_FALLBACKS.length - 1]];
+  const clientAttempts = [...YTDLP_CLIENT_FALLBACKS, YTDLP_CLIENT_FALLBACKS[YTDLP_CLIENT_FALLBACKS.length - 1]];
 
   let stdout;
   let lastErr;
-  for (let i = 0; i < attempts.length; i++) {
-    const clients = attempts[i];
-    const isLastResort = i === attempts.length - 1;
-    try {
-      stdout = await runYtdlp([
-        ...cookieArgs(),
-        '--dump-single-json',
-        '--no-playlist',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--prefer-free-formats',
-        // null = no --extractor-args at all, so yt-dlp picks its own
-        // client(s); every other entry forces a specific one as a fallback
-        // once that default has actually failed.
-        ...(clients ? ['--extractor-args', `youtube:player_client=${clients}`] : []),
-        ...(isLastResort ? MISSING_POT_ARGS : []),
-        '-f', 'bestaudio/best',
-        target,
-      ]);
-      lastErr = null;
-      break;
-    } catch (err) {
-      lastErr = err;
-      // Per-attempt, not just the final failure — otherwise there's no way
-      // to tell "every single client got sign-in-walled despite cookies"
-      // (suggests the cookies themselves are the problem) apart from "one
-      // client failed, a later one would've worked" from the logs alone.
-      console.error(`Music: attempt ${i + 1}/${attempts.length} (client=${clients || 'default'}${isLastResort ? '+missing_pot' : ''}, cookies=${cookiesPath ? 'yes' : 'no'}) failed for "${query}": ${err.message}`);
-      // Only worth retrying with a different client (or, on the last
-      // attempt, missing_pot) for a failure another attempt could plausibly
-      // fix — any other failure (deleted video, no results, region lock)
-      // will fail the exact same way on every client.
-      if (!isRetryableClientError(err.message)) break;
+  clientLoop:
+  for (let i = 0; i < clientAttempts.length; i++) {
+    const clients = clientAttempts[i];
+    const isLastResort = i === clientAttempts.length - 1;
+    for (let try_ = 1; try_ <= RETRIES_PER_CLIENT; try_++) {
+      try {
+        stdout = await runYtdlp([
+          ...cookieArgs(),
+          '--dump-single-json',
+          '--no-playlist',
+          '--no-check-certificates',
+          '--no-warnings',
+          '--prefer-free-formats',
+          // null = no --extractor-args at all, so yt-dlp picks its own
+          // client(s); every other entry forces a specific one as a
+          // fallback once that default has actually failed.
+          ...(clients ? ['--extractor-args', `youtube:player_client=${clients}`] : []),
+          ...(isLastResort ? MISSING_POT_ARGS : []),
+          '-f', 'bestaudio/best',
+          target,
+        ]);
+        lastErr = null;
+        break clientLoop;
+      } catch (err) {
+        lastErr = err;
+        // Per-attempt, not just the final failure — otherwise there's no
+        // way to tell "every single client got sign-in-walled despite
+        // cookies" (points at the cookies/account itself) apart from "one
+        // client failed, a later one would've worked" from the logs alone.
+        console.error(`Music: client ${i + 1}/${clientAttempts.length} try ${try_}/${RETRIES_PER_CLIENT} (client=${clients || 'default'}${isLastResort ? '+missing_pot' : ''}, cookies=${cookiesPath ? 'yes' : 'no'}) failed for "${query}": ${err.message}`);
+        // Only worth retrying (same client again, or a different one) for
+        // a failure another attempt could plausibly fix — any other
+        // failure (deleted video, no results, region lock) will fail the
+        // exact same way every time, so give up immediately instead of
+        // burning up to 12 attempts on something that can't succeed.
+        if (!isRetryableClientError(err.message)) break clientLoop;
+        if (try_ < RETRIES_PER_CLIENT) await sleep(RETRY_DELAY_MS);
+      }
     }
   }
   if (lastErr) throw lastErr;
