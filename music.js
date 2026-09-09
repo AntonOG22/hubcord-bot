@@ -374,19 +374,25 @@ function runYtdlp(args) {
 // "don't force one" — let yt-dlp pick from its own (regularly updated)
 // default client list.
 //
-// Deliberately does NOT prefer "web" just because cookies are configured
-// (an earlier version of this did, reasoning that a browser-exported
-// cookie is a web-session cookie). That reasoning was wrong in practice:
-// --cookies applies to every client's requests the same way, regardless of
-// which one is selected, so there's no cookie-format benefit to picking
-// web specifically — and web is also the one client YouTube has recently
-// broken in combination with cookies ("The page needs to be reloaded",
-// itself downstream of the same cookie-vs-client mismatch as the earlier
-// "Requested format is not available"). android/ios/tv_embedded aren't
-// affected by that bug, so they lead; a forced "web" only shows up as the
-// very last non-default fallback, for the rare video that genuinely
-// requires a signed-in web session to resolve at all.
-const YTDLP_CLIENT_FALLBACKS = ['android', 'ios', 'tv_embedded', null, 'web'];
+// Cookies used to be attached to every single one of these attempts.
+// Turned out that was backwards: a signed-in request makes YouTube offer
+// a different (often higher/adaptive-only) format tier that's far more
+// likely to be gated behind a PO token yt-dlp has no way to generate here
+// — live logs showed EVERY client failing with "Requested format is not
+// available" / "The page needs to be reloaded" once cookies were attached,
+// for ordinary public videos that resolve fine anonymously. Cookies only
+// ever actually fixed one specific failure — the sign-in/bot-check wall —
+// so this whole list now runs cookie-FREE first; --cookies only gets
+// attached on the small second pass below, and only after every plain
+// attempt has failed.
+const YTDLP_CLIENT_FALLBACKS = ['android', 'ios', 'tv_embedded', null];
+
+// Second pass, cookie-authenticated, only reached if every plain attempt
+// above failed AND the failure was actually the sign-in wall (the one
+// thing cookies fix) — not a format/reload error, which cookies make more
+// likely, not less, so retrying those specifically with cookies attached
+// would just be trading one failure mode for a worse one.
+const YTDLP_COOKIE_FALLBACKS = [null, 'web'];
 
 // Last-resort fallback, appended after every client above has been tried:
 // yt-dlp's documented workaround for a format list that came back empty
@@ -420,27 +426,22 @@ function sleep(ms) {
 const RETRIES_PER_CLIENT = 2;
 const RETRY_DELAY_MS = 1500;
 
-async function resolveTrack(query) {
-  const isUrl = YOUTUBE_REGEX.test(query);
-  const target = isUrl ? query : `ytsearch1:${query}`;
-
-  // The last client pairs missing_pot with whichever one the previous
-  // entry used, instead of yet another fresh client — by that point every
-  // real client has already been tried, so what's left worth trying is
-  // "same client, but stop hiding PO-token-gated formats" rather than a 5th
-  // client rotation.
-  const clientAttempts = [...YTDLP_CLIENT_FALLBACKS, YTDLP_CLIENT_FALLBACKS[YTDLP_CLIENT_FALLBACKS.length - 1]];
-
-  let stdout;
+// Runs one pass through a client list (each tried up to RETRIES_PER_CLIENT
+// times, the last one also retried once with missing_pot) and returns
+// either the resolved stdout or the last error. Shared by resolveTrack's
+// two passes — plain first, cookie-authenticated only as a fallback — so
+// the retry/backoff logic itself isn't duplicated between them.
+async function tryClientList(target, clientList, useCookies) {
+  const attempts = [...clientList, clientList[clientList.length - 1]];
   let lastErr;
   clientLoop:
-  for (let i = 0; i < clientAttempts.length; i++) {
-    const clients = clientAttempts[i];
-    const isLastResort = i === clientAttempts.length - 1;
+  for (let i = 0; i < attempts.length; i++) {
+    const clients = attempts[i];
+    const isLastResort = i === attempts.length - 1;
     for (let try_ = 1; try_ <= RETRIES_PER_CLIENT; try_++) {
       try {
-        stdout = await runYtdlp([
-          ...cookieArgs(),
+        const stdout = await runYtdlp([
+          ...(useCookies ? cookieArgs() : []),
           '--dump-single-json',
           '--no-playlist',
           '--no-check-certificates',
@@ -454,24 +455,40 @@ async function resolveTrack(query) {
           '-f', 'bestaudio/best',
           target,
         ]);
-        lastErr = null;
-        break clientLoop;
+        return { stdout, err: null };
       } catch (err) {
         lastErr = err;
         // Per-attempt, not just the final failure — otherwise there's no
-        // way to tell "every single client got sign-in-walled despite
-        // cookies" (points at the cookies/account itself) apart from "one
-        // client failed, a later one would've worked" from the logs alone.
-        console.error(`Music: client ${i + 1}/${clientAttempts.length} try ${try_}/${RETRIES_PER_CLIENT} (client=${clients || 'default'}${isLastResort ? '+missing_pot' : ''}, cookies=${cookiesPath ? 'yes' : 'no'}) failed for "${query}": ${err.message}`);
+        // way to tell "every single client failed the same way" (points at
+        // something systemic) apart from "one client failed, a later one
+        // would've worked" from the logs alone.
+        console.error(`Music: ${useCookies ? 'cookie-pass' : 'plain'} client ${i + 1}/${attempts.length} try ${try_}/${RETRIES_PER_CLIENT} (client=${clients || 'default'}${isLastResort ? '+missing_pot' : ''}) failed for "${target}": ${err.message}`);
         // Only worth retrying (same client again, or a different one) for
         // a failure another attempt could plausibly fix — any other
         // failure (deleted video, no results, region lock) will fail the
-        // exact same way every time, so give up immediately instead of
-        // burning up to 12 attempts on something that can't succeed.
+        // exact same way every time, so give up on this pass immediately
+        // instead of burning through every remaining client.
         if (!isRetryableClientError(err.message)) break clientLoop;
         if (try_ < RETRIES_PER_CLIENT) await sleep(RETRY_DELAY_MS);
       }
     }
+  }
+  return { stdout: null, err: lastErr };
+}
+
+async function resolveTrack(query) {
+  const isUrl = YOUTUBE_REGEX.test(query);
+  const target = isUrl ? query : `ytsearch1:${query}`;
+
+  // Plain (cookie-free) pass first — see YTDLP_CLIENT_FALLBACKS above for
+  // why. Only falls through to a cookie-authenticated pass if that
+  // entirely failed AND cookies are actually configured; cookies rarely
+  // help anything the plain pass couldn't already resolve, so there's no
+  // reason to spend the extra requests when there's nothing to fall back
+  // to anyway.
+  let { stdout, err: lastErr } = await tryClientList(target, YTDLP_CLIENT_FALLBACKS, false);
+  if (lastErr && cookiesPath) {
+    ({ stdout, err: lastErr } = await tryClientList(target, YTDLP_COOKIE_FALLBACKS, true));
   }
   if (lastErr) throw lastErr;
 
