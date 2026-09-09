@@ -15,6 +15,8 @@
 // just means the bot rejoins fresh next time someone runs !musik.
 const crypto = require('crypto');
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const { spawn, execFile, execFileSync } = require('child_process');
 const {
   joinVoiceChannel,
@@ -52,6 +54,33 @@ function resolveFfmpegPath() {
   }
 }
 const ffmpegPath = resolveFfmpegPath();
+
+// Optional YouTube auth: the android/tv/ios player-client fallback (see
+// YTDLP_CLIENT_FALLBACKS below) helps against an intermittent, per-client
+// "Sign in to confirm you're not a bot" wall, but YouTube can also block a
+// whole datacenter IP (exactly what Railway looks like) across every client
+// at once — no client rotation gets past that, only actually authenticating
+// does. When YTDLP_COOKIES holds a Netscape-format cookies.txt (exported
+// from a real, logged-in browser session via e.g. the "Get cookies.txt
+// LOCALLY" extension — Settings > your server on the dashboard has the
+// exact steps), every yt-dlp call uses it and is treated as that real
+// account instead of an anonymous datacenter request. Entirely optional —
+// music still works without it, just more exposed to that wall.
+const cookiesPath = (() => {
+  const raw = process.env.YTDLP_COOKIES;
+  if (!raw || !raw.trim()) return null;
+  try {
+    const file = path.join(os.tmpdir(), 'hubcord-yt-cookies.txt');
+    fs.writeFileSync(file, raw);
+    return file;
+  } catch (err) {
+    console.error('Could not write YTDLP_COOKIES to a temp file — continuing without cookies:', err.message);
+    return null;
+  }
+})();
+function cookieArgs() {
+  return cookiesPath ? ['--cookies', cookiesPath] : [];
+}
 
 const YOUTUBE_REGEX = /(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)[\w-]+/i;
 
@@ -350,6 +379,7 @@ async function resolveTrack(query) {
   for (const clients of YTDLP_CLIENT_FALLBACKS) {
     try {
       stdout = await runYtdlp([
+        ...cookieArgs(),
         '--dump-single-json',
         '--no-playlist',
         '--no-check-certificates',
@@ -760,6 +790,12 @@ async function playNext(guildId) {
       }
     }
   } catch (err) {
+    // Logged server-side too, not just posted to Discord — the Discord
+    // message alone (which is all this used to do) meant a resolve failure
+    // like YouTube's anti-bot wall left no trace in Railway's logs at all,
+    // making it impossible to tell "hit every client fallback and still got
+    // walled" apart from any other failure after the fact.
+    console.error(`Music: couldn't resolve "${next.query}" for guild ${guildId}:`, err.message);
     if (state.textChannelId && clientRef) {
       clientRef.channels.fetch(state.textChannelId)
         .then((ch) => ch?.send(`⚠️ Couldn't play "${next.query}": ${err.message} — skipping.`))
@@ -850,6 +886,7 @@ async function refillAutomaticQueue(guildId) {
     // only fetched later, lazily, by resolveTrack() when it's actually
     // about to play, same as every other queue entry.
     stdout = await runYtdlp([
+      ...cookieArgs(),
       '--dump-single-json',
       '--flat-playlist',
       '--no-warnings',
