@@ -326,25 +326,57 @@ function runYtdlp(args) {
   });
 }
 
+// Player clients to try, in order, when resolving a track. YouTube's
+// "Sign in to confirm you're not a bot" is a per-client, intermittent
+// anti-bot check — it doesn't mean the video is actually unavailable, and
+// it doesn't reliably hit the same client every time. android is tried
+// first since it's the one least likely to get flagged from a datacenter
+// IP (exactly what Railway et al. look like to YouTube); the other two are
+// only tried as a fallback when the previous one gets sign-in-walled, so a
+// genuinely broken/region-locked video still fails fast instead of
+// retrying 3x for no reason.
+const YTDLP_CLIENT_FALLBACKS = ['android,web', 'tv_embedded,web_embedded', 'ios,web'];
+
+function isSignInWallError(message) {
+  return /sign in to confirm/i.test(message || '');
+}
+
 async function resolveTrack(query) {
   const isUrl = YOUTUBE_REGEX.test(query);
   const target = isUrl ? query : `ytsearch1:${query}`;
 
-  const stdout = await runYtdlp([
-    '--dump-single-json',
-    '--no-playlist',
-    '--no-check-certificates',
-    '--no-warnings',
-    '--prefer-free-formats',
-    // The "web" client is what YouTube throttles/403s hardest from
-    // datacenter IPs (exactly what a Railway/Render/Heroku host looks like
-    // to them) — "android" gets a direct googlevideo URL that's far less
-    // likely to be blocked. Listing both keeps working for anything android
-    // can't resolve (age-gated/region-locked videos, mainly).
-    '--extractor-args', 'youtube:player_client=android,web',
-    '-f', 'bestaudio/best',
-    target,
-  ]);
+  let stdout;
+  let lastErr;
+  for (const clients of YTDLP_CLIENT_FALLBACKS) {
+    try {
+      stdout = await runYtdlp([
+        '--dump-single-json',
+        '--no-playlist',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--prefer-free-formats',
+        // The "web" client is what YouTube throttles/403s hardest from
+        // datacenter IPs (exactly what a Railway/Render/Heroku host looks
+        // like to them) — the non-web client listed first gets a direct
+        // googlevideo URL that's far less likely to be blocked. Listing
+        // both keeps working for anything the primary client can't resolve
+        // (age-gated/region-locked videos, mainly).
+        '--extractor-args', `youtube:player_client=${clients}`,
+        '-f', 'bestaudio/best',
+        target,
+      ]);
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      // Only worth retrying with a different client for the actual
+      // anti-bot wall — any other failure (deleted video, no results,
+      // region lock) will fail the exact same way on every client.
+      if (!isSignInWallError(err.message)) break;
+    }
+  }
+  if (lastErr) throw lastErr;
+
   const info = JSON.parse(stdout);
   const picked = info && info.entries ? info.entries[0] : info;
   if (!picked || !picked.url) throw new Error(`No results found for "${query}".`);
@@ -518,21 +550,30 @@ function spawnFfmpegPcm(streamUrl, httpHeaders) {
 // ---------- Playback ----------
 
 async function ensureConnection(message) {
-  const state = getState(message.guild.id);
+  // Captured once, up front, instead of reading message.guild.id from
+  // inside the listeners below: those listeners live for as long as the
+  // voice connection does (way past this function returning), and
+  // message.guild is a live cache lookup that can turn null later (guild
+  // cache eviction, a brief gateway outage, etc.) — reading it from an
+  // event handler then threw an uncaught TypeError straight out of
+  // @discordjs/voice's internals, which isn't inside anyone's try/catch
+  // and crashed the entire bot process, not just this guild's playback.
+  const guildId = message.guild.id;
+  const state = getState(guildId);
   const voiceChannel = message.member.voice.channel;
   if (!voiceChannel) throw new Error('You need to be in a voice channel for me to play music.');
 
   if (!state.connection || state.connection.state.status === VoiceConnectionStatus.Destroyed) {
     state.connection = joinVoiceChannel({
       channelId: voiceChannel.id,
-      guildId: message.guild.id,
+      guildId,
       adapterCreator: message.guild.voiceAdapterCreator,
       selfDeaf: true,
     });
     state.player = createAudioPlayer();
     const subscription = state.connection.subscribe(state.player);
     if (!subscription) {
-      console.error(`Music: connection.subscribe() returned null for guild ${message.guild.id} — the player has no active subscriber, so nothing would ever actually be sent to voice.`);
+      console.error(`Music: connection.subscribe() returned null for guild ${guildId} — the player has no active subscriber, so nothing would ever actually be sent to voice.`);
     }
 
     // Temporary-but-cheap diagnostics: every status change, on both the
@@ -540,20 +581,20 @@ async function ensureConnection(message) {
     // leave in permanently — this is exactly the kind of "says it's
     // playing but nothing happens" failure that's otherwise invisible.
     state.connection.on('stateChange', (oldState, newState) => {
-      console.log(`Music voice connection [${message.guild.id}]: ${oldState.status} -> ${newState.status}`);
+      console.log(`Music voice connection [${guildId}]: ${oldState.status} -> ${newState.status}`);
     });
     state.player.on('stateChange', (oldState, newState) => {
-      console.log(`Music player [${message.guild.id}]: ${oldState.status} -> ${newState.status}`);
+      console.log(`Music player [${guildId}]: ${oldState.status} -> ${newState.status}`);
     });
 
     state.player.on(AudioPlayerStatus.Idle, () => {
       killFfmpeg(state);
-      playNext(message.guild.id).catch((err) => console.error(`Music playNext failed in guild ${message.guild.id}:`, err.message));
+      playNext(guildId).catch((err) => console.error(`Music playNext failed in guild ${guildId}:`, err.message));
     });
     state.player.on('error', (err) => {
-      console.error(`Music player error in guild ${message.guild.id}:`, err.message, err.stack || '');
+      console.error(`Music player error in guild ${guildId}:`, err.message, err.stack || '');
       killFfmpeg(state);
-      playNext(message.guild.id).catch((e) => console.error(`Music playNext failed in guild ${message.guild.id}:`, e.message));
+      playNext(guildId).catch((e) => console.error(`Music playNext failed in guild ${guildId}:`, e.message));
     });
 
     await entersState(state.connection, VoiceConnectionStatus.Ready, 15_000);
@@ -568,9 +609,9 @@ async function ensureConnection(message) {
       state.current?.isAutomatic &&
       state.player?.state.status === AudioPlayerStatus.Playing
     ) {
-      pause(message.guild.id);
+      pause(guildId);
     }
-    state.connection.rejoin({ channelId: voiceChannel.id, guildId: message.guild.id, selfDeaf: true, adapterCreator: message.guild.voiceAdapterCreator });
+    state.connection.rejoin({ channelId: voiceChannel.id, guildId, selfDeaf: true, adapterCreator: message.guild.voiceAdapterCreator });
   }
 
   state.textChannelId = message.channel.id;

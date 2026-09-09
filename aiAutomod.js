@@ -150,11 +150,24 @@ async function classify(apiKey, config, guildId, userId, content) {
     }),
   });
 
-  if (!res.ok) throw new Error(`Mistral automod request failed: ${res.status}`);
+  if (!res.ok) {
+    // The status code alone ("failed: 401" / "failed: 400") was nearly
+    // useless for actually diagnosing a persistent outage — Mistral's error
+    // body says *why* (bad/revoked key, model deprecated, rate-limited,
+    // ...) and that's exactly the detail that was missing every time this
+    // showed up as an unexplained "AI automod is currently unavailable" in
+    // mod-logs. Bounded so a pathological error page can't blow up the log.
+    const bodyText = await res.text().catch(() => '');
+    throw new Error(`Mistral automod request failed: ${res.status} ${res.statusText} — ${bodyText.slice(0, 300)}`);
+  }
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content;
   if (!raw) throw new Error('Mistral automod returned no content');
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`Mistral automod returned non-JSON content: ${raw.slice(0, 300)}`);
+  }
 }
 
 async function handleMessage(client, message) {
@@ -176,7 +189,7 @@ async function handleMessage(client, message) {
   try {
     result = await classify(apiKey, config, guildId, message.author.id, message.content);
   } catch (err) {
-    console.error('AI automod classification failed:', err.message);
+    console.error(`AI automod classification failed (guild ${guildId}):`, err.message);
     outageUntil = Date.now() + OUTAGE_BACKOFF_MS;
     await notifyOutage(client, guildId);
     return;

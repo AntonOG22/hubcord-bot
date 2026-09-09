@@ -28,6 +28,21 @@ const { setupMusic } = require('./music');
 
 patchConsole();
 
+// Last-resort safety net: without this, ANY uncaught error anywhere in the
+// bot (a bad property access deep inside a library callback, a rejected
+// promise nobody attached a .catch to) crashes the entire Node process —
+// taking down every feature (moderation, dashboard, music, everything),
+// not just whatever was misbehaving, until the host notices and restarts
+// it. Every module here already catches its own expected failures; this
+// only catches what slipped through, logs it, and keeps the process (and
+// every unrelated server it's serving) alive instead of going dark.
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (bot kept running):', err && err.stack || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection (bot kept running):', reason && reason.stack || reason);
+});
+
 const TOKEN = process.env.DISCORD_TOKEN;
 const DASHBOARD_PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000', 10);
 
