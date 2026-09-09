@@ -355,20 +355,33 @@ function runYtdlp(args) {
   });
 }
 
-// Player clients to try, in order, when resolving a track. android is
-// tried first when there's no YouTube auth configured (see cookiesPath
-// above) since it's the client least likely to get flagged as a bot from a
-// datacenter IP; once real cookies ARE configured, "web" goes first instead
-// — cookies exported from a browser are a web-session cookie, and android's
-// own format list doesn't line up with them the same way (that mismatch is
-// exactly what showed up live as "Requested format is not available" on the
-// very first cookie-authenticated request). Either way the rest are only
-// tried as a fallback when the previous client actually got blocked/
-// mismatched, so a genuinely broken/region-locked video still fails fast
-// instead of retrying 3x for no reason.
+// Player clients to try, in order, when resolving a track. `null` means
+// "don't force one" — let yt-dlp pick from its own (regularly updated)
+// default client list, which as of recent yt-dlp versions already knows
+// which clients need a PO token it can't provide and skips straight past
+// them. That default-picking logic is exactly what our own forced
+// android/web pair was overriding, which is what caused a live "Requested
+// format is not available" on the very first cookie-authenticated request
+// — forcing a client can only ever be a downgrade from yt-dlp's own choice,
+// never an upgrade, so it's tried last, not first, and only as a fallback
+// when the default genuinely gets blocked (the sign-in wall) rather than
+// just picking different formats than we forced. android goes first among
+// the forced options with no cookies configured (least likely to be
+// flagged as a bot from a datacenter IP); with cookies, "web" goes first
+// instead, since a browser-exported cookie is a web-session cookie and
+// android's own format list doesn't line up with it the same way.
 const YTDLP_CLIENT_FALLBACKS = cookiesPath
-  ? ['web', 'android,web', 'tv_embedded,web_embedded']
-  : ['android,web', 'tv_embedded,web_embedded', 'ios,web'];
+  ? [null, 'web', 'android,web', 'tv_embedded,web_embedded']
+  : [null, 'android,web', 'tv_embedded,web_embedded', 'ios,web'];
+
+// Last-resort fallback, appended after every client above has been tried:
+// yt-dlp's documented workaround for exactly this situation — a format list
+// that came back empty (or lost every audio format) because YouTube gates
+// it behind a "PO token" yt-dlp has no way to generate here. missing_pot
+// tells it to list those formats anyway instead of silently filtering them
+// out; they still often work fine for a plain audio download even without
+// the token, which is all this ever needs.
+const MISSING_POT_ARGS = ['--extractor-args', 'youtube:formats=missing_pot'];
 
 // Both are "this client didn't work, a different one might" failures, not
 // "this video is actually broken" ones — a per-client anti-bot wall, and a
@@ -382,9 +395,18 @@ async function resolveTrack(query) {
   const isUrl = YOUTUBE_REGEX.test(query);
   const target = isUrl ? query : `ytsearch1:${query}`;
 
+  // The last attempt pairs missing_pot with whichever client the previous
+  // attempt used, instead of yet another fresh client — by that point every
+  // real client has already been tried, so what's left worth trying is
+  // "same client, but stop hiding PO-token-gated formats" rather than a 5th
+  // client rotation.
+  const attempts = [...YTDLP_CLIENT_FALLBACKS, YTDLP_CLIENT_FALLBACKS[YTDLP_CLIENT_FALLBACKS.length - 1]];
+
   let stdout;
   let lastErr;
-  for (const clients of YTDLP_CLIENT_FALLBACKS) {
+  for (let i = 0; i < attempts.length; i++) {
+    const clients = attempts[i];
+    const isLastResort = i === attempts.length - 1;
     try {
       stdout = await runYtdlp([
         ...cookieArgs(),
@@ -393,13 +415,11 @@ async function resolveTrack(query) {
         '--no-check-certificates',
         '--no-warnings',
         '--prefer-free-formats',
-        // The "web" client is what YouTube throttles/403s hardest from
-        // datacenter IPs (exactly what a Railway/Render/Heroku host looks
-        // like to them) — the non-web client listed first gets a direct
-        // googlevideo URL that's far less likely to be blocked. Listing
-        // both keeps working for anything the primary client can't resolve
-        // (age-gated/region-locked videos, mainly).
-        '--extractor-args', `youtube:player_client=${clients}`,
+        // null = no --extractor-args at all, so yt-dlp picks its own
+        // client(s); every other entry forces a specific one as a fallback
+        // once that default has actually failed.
+        ...(clients ? ['--extractor-args', `youtube:player_client=${clients}`] : []),
+        ...(isLastResort ? MISSING_POT_ARGS : []),
         '-f', 'bestaudio/best',
         target,
       ]);
@@ -407,9 +427,10 @@ async function resolveTrack(query) {
       break;
     } catch (err) {
       lastErr = err;
-      // Only worth retrying with a different client for the actual
-      // anti-bot wall — any other failure (deleted video, no results,
-      // region lock) will fail the exact same way on every client.
+      // Only worth retrying with a different client (or, on the last
+      // attempt, missing_pot) for a failure another attempt could plausibly
+      // fix — any other failure (deleted video, no results, region lock)
+      // will fail the exact same way on every client.
       if (!isRetryableClientError(err.message)) break;
     }
   }
