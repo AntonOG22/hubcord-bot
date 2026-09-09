@@ -1328,13 +1328,12 @@ cmd({
 
 cmd({
   name: 'lyrics', aliases: ['ly'], category: 'Music', permission: null,
-  usage: '', description: "Shows lyrics for the current song, synced to playback position (with the current line highlighted) when available — falls back to plain lyrics, or \"Lyrics is not available\" if nothing is found. Can be turned off entirely in the dashboard's Music tab.",
+  usage: '', description: "Shows lyrics for the current song, synced to playback position (with the current line highlighted) when available — falls back to plain lyrics, or \"Lyrics is not available\" if nothing is found. The message keeps updating live as the song plays and announces when it ends. Can be turned off entirely in the dashboard's Music tab.",
   run: async (message) => {
     music.requirePermission(message.guild.id, 'lyrics', message.member);
     music.requireVoiceChatChannel(message);
-    const embed = await music.buildLyricsEmbed(message.guild.id);
-    if (!embed) return 'Nothing is playing right now.';
-    await message.channel.send({ embeds: [embed] });
+    const sent = await music.startLyricsLive(message);
+    if (!sent) return 'Nothing is playing right now.';
     return null;
   },
 });

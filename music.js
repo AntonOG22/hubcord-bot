@@ -265,6 +265,7 @@ function getState(guildId) {
       ffmpegProc: null,
       idleTimer: null,
       automatic: null, // { active, mood, startedBy, seen: Set<videoId> } while automatic mode is running
+      lyricsLive: null, // { message, intervalId } while a !lyrics session is live-updating
     };
     guildStates.set(guildId, state);
   }
@@ -532,48 +533,130 @@ function buildSyncedLyricsWindow(lines, elapsedMs, radius = 4) {
     .join('\n');
 }
 
-async function buildLyricsEmbed(guildId) {
+// Split from buildLyricsEmbed (below) so a live-updating !lyrics session
+// (see startLyricsLive) can fetch the lyrics ONCE per song and re-render
+// just the moving highlighted-line window on every tick from the already-
+// fetched data, instead of hitting lrclib.net again every few seconds for
+// a plain-text result that never changes anyway.
+async function buildLyricsData(guildId) {
   const state = getState(guildId);
   const entry = state.current;
   if (!entry) return null;
 
   const settings = getSettings(guildId);
-  const embed = new EmbedBuilder().setColor(0x3ecf8e).setFooter(brandFooter(clientRef, guildId));
   const displayTitle = entry.title || entry.query;
 
-  if (!settings.lyricsEnabled) {
-    embed.setTitle(`🎤 ${displayTitle}`).setDescription('Lyrics are turned off on this server.');
-    return embed;
-  }
+  if (!settings.lyricsEnabled) return { entry, displayTitle, kind: 'disabled' };
 
   const guess = parseArtistTrack(displayTitle);
   const artist = entry.artist || guess.artist;
   const track = entry.track || guess.track;
-
   const lyrics = await fetchLyrics(artist, track);
+
+  if (!lyrics) return { entry, displayTitle, kind: 'unavailable' };
+  if (lyrics.syncedLyrics) return { entry, displayTitle, kind: 'synced', lines: parseSyncedLyrics(lyrics.syncedLyrics) };
+  return { entry, displayTitle, kind: 'plain', text: lyrics.plainLyrics };
+}
+
+function renderLyricsEmbed(guildId, data) {
+  const { entry, displayTitle } = data;
+  const embed = new EmbedBuilder()
+    .setColor(0x3ecf8e)
+    .setTitle(`🎤 ${displayTitle}`)
+    .setFooter(brandFooter(clientRef, guildId));
   if (entry.thumbnail) embed.setThumbnail(entry.thumbnail);
   if (entry.webpageUrl) embed.setURL(entry.webpageUrl);
 
-  if (!lyrics) {
-    embed.setTitle(`🎤 ${displayTitle}`).setDescription('Lyrics is not available for this song.');
-    return embed;
-  }
+  if (data.kind === 'disabled') return embed.setDescription('Lyrics are turned off on this server.');
+  if (data.kind === 'unavailable') return embed.setDescription('Lyrics is not available for this song.');
 
-  if (lyrics.syncedLyrics) {
-    const lines = parseSyncedLyrics(lyrics.syncedLyrics);
-    const elapsedMs = getElapsedMs(state);
-    embed
-      .setTitle(`🎤 ${displayTitle}`)
-      .setDescription(buildSyncedLyricsWindow(lines, elapsedMs))
+  if (data.kind === 'synced') {
+    const elapsedMs = getElapsedMs(getState(guildId));
+    return embed
+      .setDescription(buildSyncedLyricsWindow(data.lines, elapsedMs))
       .addFields({ name: 'Position', value: buildProgressBar(elapsedMs / 1000, entry.duration) });
-    return embed;
   }
 
   // Plain (unsynced) lyrics — Discord embed descriptions cap at 4096
   // characters; nearly every song fits, but trim safely just in case.
-  const plain = lyrics.plainLyrics.length > 3900 ? lyrics.plainLyrics.slice(0, 3900) + '\n…' : lyrics.plainLyrics;
-  embed.setTitle(`🎤 ${displayTitle}`).setDescription(plain || 'Lyrics is not available for this song.');
-  return embed;
+  const plain = data.text.length > 3900 ? data.text.slice(0, 3900) + '\n…' : data.text;
+  return embed.setDescription(plain || 'Lyrics is not available for this song.');
+}
+
+async function buildLyricsEmbed(guildId) {
+  const data = await buildLyricsData(guildId);
+  if (!data) return null;
+  return renderLyricsEmbed(guildId, data);
+}
+
+function buildLyricsEndedEmbed(guildId, title) {
+  return new EmbedBuilder()
+    .setColor(0x3ecf8e)
+    .setTitle(`🎤 ${title}`)
+    .setDescription('🎵 This song has ended.')
+    .setFooter(brandFooter(clientRef, guildId));
+}
+
+const LYRICS_LIVE_UPDATE_MS = 6000; // well under Discord's edit rate limit
+
+function stopLyricsLive(guildId) {
+  const state = getState(guildId);
+  if (state.lyricsLive?.intervalId) clearInterval(state.lyricsLive.intervalId);
+  state.lyricsLive = null;
+}
+
+// !lyrics / !ly: sends one message, then keeps editing that SAME message
+// every few seconds — the highlighted line advancing through the song for
+// synced lyrics — until the tracked song stops being state.current (it
+// finished, got skipped, or the bot was stopped), at which point it edits
+// one last time to say so and stops. Only one live session per guild at a
+// time; starting a new one replaces whatever was already running instead
+// of leaving two intervals fighting over separate messages.
+async function startLyricsLive(message) {
+  const guildId = message.guild.id;
+  const state = getState(guildId);
+  if (!state.current) return null;
+
+  const trackId = state.current.id;
+  const title = state.current.title || state.current.query;
+  const data = await buildLyricsData(guildId);
+  if (!data) return null;
+
+  stopLyricsLive(guildId);
+
+  const sent = await message.channel.send({ embeds: [renderLyricsEmbed(guildId, data)] });
+
+  // Only synced lyrics have anything to actually redraw on a timer — the
+  // highlighted line moving with playback position. Plain/unavailable/
+  // disabled lyrics don't change while the song plays, so re-fetching from
+  // lrclib.net every tick for no visual difference would just be wasted
+  // API calls; this still watches for the song ending either way.
+  const needsPositionUpdates = data.kind === 'synced';
+
+  const session = { message: sent };
+  session.intervalId = setInterval(async () => {
+    const s = getState(guildId);
+    if (s.lyricsLive !== session) return; // superseded or already stopped
+    const stillPlaying = s.current && s.current.id === trackId;
+    try {
+      if (!stillPlaying) {
+        await sent.edit({ embeds: [buildLyricsEndedEmbed(guildId, title)] });
+        stopLyricsLive(guildId);
+        return;
+      }
+      if (needsPositionUpdates) {
+        await sent.edit({ embeds: [renderLyricsEmbed(guildId, data)] });
+      }
+    } catch (err) {
+      // Message deleted, missing permissions, etc. — stop instead of
+      // erroring on this same interval forever.
+      console.error(`Live lyrics update failed in guild ${guildId}:`, err.message);
+      stopLyricsLive(guildId);
+    }
+  }, LYRICS_LIVE_UPDATE_MS);
+
+  state.lyricsLive = session;
+  return sent;
 }
 
 // Spawns ffmpeg to transcode the resolved stream URL to raw PCM on stdout —
@@ -1183,6 +1266,7 @@ module.exports = {
   getStatus,
   getHistory,
   buildLyricsEmbed,
+  startLyricsLive,
   buildProgressBar,
   getElapsedMs,
 };
