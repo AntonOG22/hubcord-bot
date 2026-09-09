@@ -355,19 +355,27 @@ function runYtdlp(args) {
   });
 }
 
-// Player clients to try, in order, when resolving a track. YouTube's
-// "Sign in to confirm you're not a bot" is a per-client, intermittent
-// anti-bot check — it doesn't mean the video is actually unavailable, and
-// it doesn't reliably hit the same client every time. android is tried
-// first since it's the one least likely to get flagged from a datacenter
-// IP (exactly what Railway et al. look like to YouTube); the other two are
-// only tried as a fallback when the previous one gets sign-in-walled, so a
-// genuinely broken/region-locked video still fails fast instead of
-// retrying 3x for no reason.
-const YTDLP_CLIENT_FALLBACKS = ['android,web', 'tv_embedded,web_embedded', 'ios,web'];
+// Player clients to try, in order, when resolving a track. android is
+// tried first when there's no YouTube auth configured (see cookiesPath
+// above) since it's the client least likely to get flagged as a bot from a
+// datacenter IP; once real cookies ARE configured, "web" goes first instead
+// — cookies exported from a browser are a web-session cookie, and android's
+// own format list doesn't line up with them the same way (that mismatch is
+// exactly what showed up live as "Requested format is not available" on the
+// very first cookie-authenticated request). Either way the rest are only
+// tried as a fallback when the previous client actually got blocked/
+// mismatched, so a genuinely broken/region-locked video still fails fast
+// instead of retrying 3x for no reason.
+const YTDLP_CLIENT_FALLBACKS = cookiesPath
+  ? ['web', 'android,web', 'tv_embedded,web_embedded']
+  : ['android,web', 'tv_embedded,web_embedded', 'ios,web'];
 
-function isSignInWallError(message) {
-  return /sign in to confirm/i.test(message || '');
+// Both are "this client didn't work, a different one might" failures, not
+// "this video is actually broken" ones — a per-client anti-bot wall, and a
+// client whose format list doesn't line up with the current auth state
+// (cookies vs. none) the way this one just did.
+function isRetryableClientError(message) {
+  return /sign in to confirm|requested format is not available/i.test(message || '');
 }
 
 async function resolveTrack(query) {
@@ -402,7 +410,7 @@ async function resolveTrack(query) {
       // Only worth retrying with a different client for the actual
       // anti-bot wall — any other failure (deleted video, no results,
       // region lock) will fail the exact same way on every client.
-      if (!isSignInWallError(err.message)) break;
+      if (!isRetryableClientError(err.message)) break;
     }
   }
   if (lastErr) throw lastErr;
