@@ -357,38 +357,37 @@ function runYtdlp(args) {
 
 // Player clients to try, in order, when resolving a track. `null` means
 // "don't force one" — let yt-dlp pick from its own (regularly updated)
-// default client list, which as of recent yt-dlp versions already knows
-// which clients need a PO token it can't provide and skips straight past
-// them. That default-picking logic is exactly what our own forced
-// android/web pair was overriding, which is what caused a live "Requested
-// format is not available" on the very first cookie-authenticated request
-// — forcing a client can only ever be a downgrade from yt-dlp's own choice,
-// never an upgrade, so it's tried last, not first, and only as a fallback
-// when the default genuinely gets blocked (the sign-in wall) rather than
-// just picking different formats than we forced. android goes first among
-// the forced options with no cookies configured (least likely to be
-// flagged as a bot from a datacenter IP); with cookies, "web" goes first
-// instead, since a browser-exported cookie is a web-session cookie and
-// android's own format list doesn't line up with it the same way.
-const YTDLP_CLIENT_FALLBACKS = cookiesPath
-  ? [null, 'web', 'android,web', 'tv_embedded,web_embedded']
-  : [null, 'android,web', 'tv_embedded,web_embedded', 'ios,web'];
+// default client list.
+//
+// Deliberately does NOT prefer "web" just because cookies are configured
+// (an earlier version of this did, reasoning that a browser-exported
+// cookie is a web-session cookie). That reasoning was wrong in practice:
+// --cookies applies to every client's requests the same way, regardless of
+// which one is selected, so there's no cookie-format benefit to picking
+// web specifically — and web is also the one client YouTube has recently
+// broken in combination with cookies ("The page needs to be reloaded",
+// itself downstream of the same cookie-vs-client mismatch as the earlier
+// "Requested format is not available"). android/ios/tv_embedded aren't
+// affected by that bug, so they lead; a forced "web" only shows up as the
+// very last non-default fallback, for the rare video that genuinely
+// requires a signed-in web session to resolve at all.
+const YTDLP_CLIENT_FALLBACKS = ['android', 'ios', 'tv_embedded', null, 'web'];
 
 // Last-resort fallback, appended after every client above has been tried:
-// yt-dlp's documented workaround for exactly this situation — a format list
-// that came back empty (or lost every audio format) because YouTube gates
-// it behind a "PO token" yt-dlp has no way to generate here. missing_pot
-// tells it to list those formats anyway instead of silently filtering them
-// out; they still often work fine for a plain audio download even without
-// the token, which is all this ever needs.
+// yt-dlp's documented workaround for a format list that came back empty
+// (or lost every audio format) because YouTube gates it behind a "PO
+// token" yt-dlp has no way to generate here. missing_pot tells it to list
+// those formats anyway instead of silently filtering them out; they still
+// often work fine for a plain audio download even without the token.
 const MISSING_POT_ARGS = ['--extractor-args', 'youtube:formats=missing_pot'];
 
-// Both are "this client didn't work, a different one might" failures, not
-// "this video is actually broken" ones — a per-client anti-bot wall, and a
-// client whose format list doesn't line up with the current auth state
-// (cookies vs. none) the way this one just did.
+// All of these are "this client didn't work, a different one might" failures
+// — not "this video is actually broken" ones — so they're worth burning a
+// retry on: a per-client anti-bot wall, a client whose format list doesn't
+// line up with the current auth state, and YouTube's own known "reload"
+// bug for specific client/cookie combinations.
 function isRetryableClientError(message) {
-  return /sign in to confirm|requested format is not available/i.test(message || '');
+  return /sign in to confirm|requested format is not available|page needs to be reloaded/i.test(message || '');
 }
 
 async function resolveTrack(query) {
