@@ -68,10 +68,24 @@ const ffmpegPath = resolveFfmpegPath();
 // music still works without it, just more exposed to that wall.
 const cookiesPath = (() => {
   const raw = process.env.YTDLP_COOKIES;
-  if (!raw || !raw.trim()) return null;
+  if (!raw || !raw.trim()) {
+    console.log('YTDLP_COOKIES not set — music playback has no YouTube auth, more exposed to the anti-bot wall.');
+    return null;
+  }
   try {
     const file = path.join(os.tmpdir(), 'hubcord-yt-cookies.txt');
     fs.writeFileSync(file, raw);
+    // Sanity-check the content instead of assuming a set variable is a
+    // usable cookies.txt — the single biggest way this silently does
+    // nothing is a paste that's missing lines, wrong format, or just isn't
+    // actually a YouTube/Google cookie export. Never logs the cookie
+    // values themselves, only shape.
+    const cookieLines = raw.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#'));
+    const hasYoutubeDomain = /\.?youtube\.com|\.?google\.com/i.test(raw);
+    console.log(`YTDLP_COOKIES loaded: ${cookieLines.length} cookie line(s), youtube/google domain present: ${hasYoutubeDomain}.`);
+    if (cookieLines.length === 0 || !hasYoutubeDomain) {
+      console.error('YTDLP_COOKIES looks malformed (no cookie lines, or no youtube.com/google.com entries) — check the exported file was pasted in full, in Netscape cookies.txt format.');
+    }
     return file;
   } catch (err) {
     console.error('Could not write YTDLP_COOKIES to a temp file — continuing without cookies:', err.message);
@@ -427,6 +441,11 @@ async function resolveTrack(query) {
       break;
     } catch (err) {
       lastErr = err;
+      // Per-attempt, not just the final failure — otherwise there's no way
+      // to tell "every single client got sign-in-walled despite cookies"
+      // (suggests the cookies themselves are the problem) apart from "one
+      // client failed, a later one would've worked" from the logs alone.
+      console.error(`Music: attempt ${i + 1}/${attempts.length} (client=${clients || 'default'}${isLastResort ? '+missing_pot' : ''}, cookies=${cookiesPath ? 'yes' : 'no'}) failed for "${query}": ${err.message}`);
       // Only worth retrying with a different client (or, on the last
       // attempt, missing_pot) for a failure another attempt could plausibly
       // fix — any other failure (deleted video, no results, region lock)
