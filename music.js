@@ -782,19 +782,31 @@ async function playNext(guildId) {
     || !state.automatic.homeChannelId
     || state.connection?.joinConfig.channelId === state.automatic.homeChannelId;
 
-  let next = state.queue.shift();
-
   // The queue can already contain leftover automatic picks from before an
   // admin's request pulled the bot to a different channel (they were
-  // queued while still at home, then never got a turn). Away from home,
-  // those don't get to play — put it back untouched and treat the queue as
-  // empty for this turn, so it falls through to scheduleIdleDisconnect's
-  // 30s return-home timer instead of leaking automatic-mode music into
-  // whatever channel a request happened to be answered in.
-  if (next && next.isAutomatic && state.automatic?.active && !atAutomaticHome) {
-    state.queue.unshift(next);
-    next = undefined;
+  // queued while still at home, then never got a turn) — and, since a
+  // manually-requested song is pushed to the BACK of the queue rather than
+  // in front of those, there can be several of them ahead of the actual
+  // request. Away from home, none of them get to play: skip past every one
+  // of them (not just the first) to find a real candidate — an earlier
+  // version only checked the very first queue entry, so an admin's request
+  // sitting behind even one leftover automatic pick silently never played
+  // at all, the bot just joined the away channel and sat there doing
+  // nothing until the 30s return-home timer fired.
+  let next;
+  const deferredAutomatic = [];
+  while (state.queue.length > 0) {
+    const candidate = state.queue.shift();
+    if (candidate.isAutomatic && state.automatic?.active && !atAutomaticHome) {
+      deferredAutomatic.push(candidate);
+      continue;
+    }
+    next = candidate;
+    break;
   }
+  // Put them back untouched, in their original order, so they're still
+  // next in line once the bot actually returns home.
+  if (deferredAutomatic.length > 0) state.queue.unshift(...deferredAutomatic);
 
   if (!next && state.automatic?.active && atAutomaticHome) {
     await refillAutomaticQueue(guildId);
