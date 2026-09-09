@@ -597,7 +597,11 @@ function buildLyricsEndedEmbed(guildId, title) {
     .setFooter(brandFooter(clientRef, guildId));
 }
 
-const LYRICS_LIVE_UPDATE_MS = 6000; // well under Discord's edit rate limit
+// Discord's edit-rate-limit bucket for a single message is generous enough
+// for this (discord.js also queues/delays requests transparently if a burst
+// ever did hit it, rather than erroring out) — 1s keeps the highlighted
+// line visibly in step with the actual audio instead of looking laggy.
+const LYRICS_LIVE_UPDATE_MS = 1000;
 
 function stopLyricsLive(guildId) {
   const state = getState(guildId);
