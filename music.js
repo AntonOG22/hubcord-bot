@@ -979,7 +979,12 @@ async function playNext(guildId) {
     // making it impossible to tell "hit every client fallback and still got
     // walled" apart from any other failure after the fact.
     console.error(`Music: couldn't resolve "${next.query}" for guild ${guildId}:`, err.message);
-    if (state.textChannelId && clientRef) {
+    // Automatic mode picks its own candidates and just moves on to the
+    // next one when one fails — announcing every single miss flooded the
+    // channel during a rough patch (a YouTube anti-bot wall can mean
+    // several automatic picks in a row fail within the same minute). A
+    // real !musik request the user actually typed still gets told.
+    if (!next.isAutomatic && state.textChannelId && clientRef) {
       clientRef.channels.fetch(state.textChannelId)
         .then((ch) => ch?.send(`⚠️ Couldn't play "${next.query}": ${err.message} — skipping.`))
         .catch(() => {});
