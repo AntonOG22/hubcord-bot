@@ -485,6 +485,41 @@ async function tryClientList(target, clientList, useCookies, excludeClients) {
   return { stdout: null, err: lastErr, usedClient: null };
 }
 
+// Last resort when EVERY YouTube path is exhausted (every client, cookies
+// included): SoundCloud. Not a YouTube trick at all — a completely
+// different platform, on its own infrastructure, with no exposure to
+// YouTube's anti-bot IP-reputation blocking whatsoever. Only attempted for
+// a text search (a pasted YouTube URL has no SoundCloud equivalent to look
+// up) — and the result can genuinely be a different recording/upload of
+// the song, not a bug, just the nature of "YouTube flatly won't give us
+// this one, here's the closest thing that will actually play instead of
+// nothing."
+async function resolveFromSoundCloud(query) {
+  const stdout = await runYtdlp([
+    '--dump-single-json',
+    '--no-playlist',
+    '--no-check-certificates',
+    '--no-warnings',
+    '-f', 'bestaudio/best',
+    `scsearch1:${query}`,
+  ]);
+  const info = JSON.parse(stdout);
+  const picked = info && info.entries ? info.entries[0] : info;
+  if (!picked || !picked.url) throw new Error(`No SoundCloud results for "${query}" either.`);
+  return {
+    streamUrl: picked.url,
+    httpHeaders: picked.http_headers || null,
+    title: picked.title || 'Unknown title',
+    webpageUrl: picked.webpage_url || null,
+    duration: picked.duration || null,
+    thumbnail: picked.thumbnail || null,
+    artist: picked.artist || picked.uploader || null,
+    track: picked.track || null,
+    usedClient: 'soundcloud',
+    fromSoundCloud: true,
+  };
+}
+
 // `excludeClients`: a Set of "family:client" keys (see tryClientList) to
 // skip — used by retryPlayback below to force a genuinely different source
 // than one that already resolved fine but then produced no actual audio.
@@ -502,7 +537,19 @@ async function resolveTrack(query, excludeClients = new Set()) {
   if (!stdout && cookiesPath) {
     ({ stdout, err: lastErr, usedClient } = await tryClientList(target, YTDLP_COOKIE_FALLBACKS, true, excludeClients));
   }
-  if (!stdout) throw lastErr || new Error(`No more sources to try for "${query}".`);
+
+  if (!stdout) {
+    if (!isUrl && !excludeClients.has('soundcloud')) {
+      try {
+        const scTrack = await resolveFromSoundCloud(query);
+        console.error(`Music: YouTube exhausted for "${query}" — falling back to SoundCloud ("${scTrack.title}").`);
+        return scTrack;
+      } catch (scErr) {
+        console.error(`Music: SoundCloud fallback also failed for "${query}": ${scErr.message}`);
+      }
+    }
+    throw lastErr || new Error(`No more sources to try for "${query}".`);
+  }
 
   const info = JSON.parse(stdout);
   const picked = info && info.entries ? info.entries[0] : info;
@@ -905,7 +952,14 @@ function playResolvedTrack(guildId, next, track, excludeClients, attemptNumber) 
           const embed = new EmbedBuilder()
             .setColor(0x3ecf8e)
             .setTitle('▶️ Now playing')
-            .setDescription(`**${track.title}**${next.requestedBy ? `\nRequested by <@${next.requestedBy}>` : ''}`)
+            .setDescription(
+              `**${track.title}**${next.requestedBy ? `\nRequested by <@${next.requestedBy}>` : ''}` +
+              // YouTube flatly refused every client/cookie combo for this
+              // one — worth being upfront that this came from SoundCloud
+              // instead (and so may be a different recording/upload of the
+              // song), not silently passing it off as the YouTube result.
+              (track.fromSoundCloud ? `\n*(via SoundCloud — YouTube was unavailable for this one)*` : ''),
+            )
             .setFooter(brandFooter(clientRef, guildId));
           if (track.thumbnail) embed.setThumbnail(track.thumbnail);
           if (track.webpageUrl) embed.setURL(track.webpageUrl);
