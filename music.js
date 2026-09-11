@@ -371,6 +371,40 @@ function runYtdlp(args) {
   });
 }
 
+// Turns a raw yt-dlp error (often a multi-line dump with wiki links, e.g.
+// "Sign in to confirm you're not a bot. Use --cookies-from-browser or
+// --cookies ... See https://github.com/yt-dlp/... for how to ...") into one
+// short, plain sentence fit for a Discord message. The full raw text still
+// goes to console.error at every call site — this is only ever what gets
+// shown to actual users.
+function friendlyErrorReason(message) {
+  const msg = message || '';
+  if (/sign in to confirm/i.test(msg)) return "YouTube blocked every available source for this track.";
+  if (/drm protected/i.test(msg)) return 'That result is DRM-protected and can\'t be streamed.';
+  if (/page needs to be reloaded/i.test(msg)) return 'YouTube had a temporary glitch resolving this track.';
+  if (/requested format is not available/i.test(msg)) return 'No playable audio format was available for this track.';
+  if (/no (playable )?(soundcloud )?results/i.test(msg)) return 'No results were found for that.';
+  if (/timed? ?out|econnreset|econnrefused|network|fetch failed/i.test(msg)) return 'A network error interrupted the lookup.';
+  // Fallback: just the first line, capped — never the full multi-line dump.
+  return (msg.split('\n')[0] || 'Unknown error').slice(0, 200);
+}
+
+function buildPlaybackFailureEmbed(guildId, title, reason) {
+  return new EmbedBuilder()
+    .setColor(0xe74c3c)
+    .setTitle("⚠️ Couldn't play this track")
+    .setDescription(`**${title}**\n${reason}\n\nSkipping to the next one.`)
+    .setFooter(brandFooter(clientRef, guildId));
+}
+
+function sendPlaybackFailureEmbed(guildId, title, reason) {
+  const state = getState(guildId);
+  if (!state.textChannelId || !clientRef) return;
+  clientRef.channels.fetch(state.textChannelId)
+    .then((ch) => ch?.send({ embeds: [buildPlaybackFailureEmbed(guildId, title, reason)] }))
+    .catch(() => {});
+}
+
 // Player clients to try, in order, when resolving a track. `null` means
 // "don't force one" — let yt-dlp pick from its own (regularly updated)
 // default client list.
@@ -494,18 +528,45 @@ async function tryClientList(target, clientList, useCookies, excludeClients) {
 // the song, not a bug, just the nature of "YouTube flatly won't give us
 // this one, here's the closest thing that will actually play instead of
 // nothing."
+// yt-dlp still exits non-zero (a real Node child_process "error") when
+// --ignore-errors skipped a broken entry, even though stdout has perfectly
+// good JSON for whichever entries DID work — runYtdlp's shared strict
+// behavior would discard that valid output outright. This tolerates a
+// non-zero exit as long as something actually came back on stdout, only
+// rejecting when there's truly nothing usable to parse.
+function runYtdlpTolerant(args) {
+  return new Promise((resolve, reject) => {
+    execFile(YTDLP_PATH, args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (stdout && stdout.trim()) return resolve(stdout);
+      reject(err || new Error((stderr || 'yt-dlp produced no output').trim().split('\n').pop()));
+    });
+  });
+}
+
 async function resolveFromSoundCloud(query) {
-  const stdout = await runYtdlp([
+  // Pulls the top 5 matches, not just #1 — a live failure showed the single
+  // top result can be DRM-protected (a Go+/premium-only upload yt-dlp can't
+  // stream), which with only one candidate meant the whole fallback just
+  // failed outright even though other, playable uploads of the same song
+  // were right there in the next few results. --ignore-errors keeps one
+  // broken entry (DRM or otherwise) from aborting the whole batch — yt-dlp
+  // reports it back as `null` in `entries` rather than a matching object,
+  // filtered out below. Uses the tolerant runner above, not the shared
+  // strict one, since yt-dlp exits non-zero here even on this kind of
+  // partial success.
+  const stdout = await runYtdlpTolerant([
     '--dump-single-json',
     '--no-playlist',
     '--no-check-certificates',
     '--no-warnings',
+    '--ignore-errors',
     '-f', 'bestaudio/best',
-    `scsearch1:${query}`,
+    `scsearch5:${query}`,
   ]);
   const info = JSON.parse(stdout);
-  const picked = info && info.entries ? info.entries[0] : info;
-  if (!picked || !picked.url) throw new Error(`No SoundCloud results for "${query}" either.`);
+  const candidates = info && info.entries ? info.entries : [info];
+  const picked = (candidates || []).find((e) => e && e.url);
+  if (!picked) throw new Error(`No playable SoundCloud results for "${query}" either.`);
   return {
     streamUrl: picked.url,
     httpHeaders: picked.http_headers || null,
@@ -1049,11 +1110,7 @@ async function retryPlayback(guildId, next, excludeClients, previousAttemptNumbe
     // Same "don't flood the channel" reasoning as the resolve-failure catch
     // below — automatic mode just moves on quietly, a real request still
     // gets told.
-    if (!next.isAutomatic && state.textChannelId && clientRef) {
-      clientRef.channels.fetch(state.textChannelId)
-        .then((ch) => ch?.send(`⚠️ Couldn't get any audio for **${next.title || next.query}** after trying multiple sources — skipping.`))
-        .catch(() => {});
-    }
+    if (!next.isAutomatic) sendPlaybackFailureEmbed(guildId, next.title || next.query, 'No audio could be fetched from any available source.');
     state.awaitingRetry = false; // giving up ourselves now — let the normal Idle/error handling apply again from here on
     killFfmpeg(state);
     playNext(guildId).catch((err) => console.error(`Music playNext failed in guild ${guildId}:`, err.message));
@@ -1072,11 +1129,7 @@ async function retryPlayback(guildId, next, excludeClients, previousAttemptNumbe
     // Genuinely nothing left to try (every client excluded, or a real
     // resolve error this time) — same handling as a first-attempt failure.
     console.error(`Music: couldn't resolve a fallback source for "${next.query}" in guild ${guildId}:`, err.message);
-    if (!next.isAutomatic && state.textChannelId && clientRef) {
-      clientRef.channels.fetch(state.textChannelId)
-        .then((ch) => ch?.send(`⚠️ Couldn't play "${next.query}": ${err.message} — skipping.`))
-        .catch(() => {});
-    }
+    if (!next.isAutomatic) sendPlaybackFailureEmbed(guildId, next.title || next.query, friendlyErrorReason(err.message));
     state.awaitingRetry = false;
     killFfmpeg(state);
     playNext(guildId).catch((e) => console.error(`Music playNext failed in guild ${guildId}:`, e.message));
@@ -1188,11 +1241,7 @@ async function playNext(guildId) {
     // channel during a rough patch (a YouTube anti-bot wall can mean
     // several automatic picks in a row fail within the same minute). A
     // real !musik request the user actually typed still gets told.
-    if (!next.isAutomatic && state.textChannelId && clientRef) {
-      clientRef.channels.fetch(state.textChannelId)
-        .then((ch) => ch?.send(`⚠️ Couldn't play "${next.query}": ${err.message} — skipping.`))
-        .catch(() => {});
-    }
+    if (!next.isAutomatic) sendPlaybackFailureEmbed(guildId, next.title || next.query, friendlyErrorReason(err.message));
     // Broken track (region-locked, deleted, no results, ...) — move on
     // instead of getting the whole queue stuck on one bad entry.
     playNext(guildId).catch((e) => console.error(`Music playNext failed in guild ${guildId}:`, e.message));
