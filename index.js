@@ -67,6 +67,14 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.Reaction],
 });
 
+// Every feature module here (XP, auto-responses, sticky messages, counting,
+// custom commands, automod, imposter's word-leak guard, ...) registers its
+// own client.on('messageCreate', ...) listener — well past Node's default
+// EventEmitter cap of 10, which otherwise logs a false-positive
+// "MaxListenersExceededWarning: possible memory leak" on every boot. This
+// is genuinely many independent, intentional listeners, not a leak.
+client.setMaxListeners(30);
+
 client.once('ready', async () => {
   console.log(`Bot logged in as ${client.user.tag}, in ${client.guilds.cache.size} server(s)`);
 
