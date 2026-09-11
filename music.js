@@ -887,14 +887,18 @@ async function ensureConnection(message) {
   return state;
 }
 
-// How many different clients to actually try getting real audio bytes from
-// (not just a resolvable URL — see below) before giving up on a track.
-const MAX_PLAYBACK_ATTEMPTS = 3;
+// How many different YouTube clients to actually try getting real audio
+// bytes from (not just a resolvable URL — see below) before falling all
+// the way through to the guaranteed SoundCloud attempt (see retryPlayback).
+const MAX_PLAYBACK_ATTEMPTS = 2;
 // Safety net for a stream that connects but never actually sends data.
 // ffmpeg's own -reconnect flags handle ordinary drops and it exits fast on
 // a definitive HTTP error (a 403 doesn't get "reconnected"); this only
 // exists for the rarer case of a connection that just hangs open silently.
-const AUDIO_START_TIMEOUT_MS = 15000;
+// Kept short — every second here is a second of dead air for whoever's
+// listening, and waiting longer for a YouTube stream that's this likely to
+// be blocked isn't worth it when SoundCloud is right behind it.
+const AUDIO_START_TIMEOUT_MS = 10000;
 
 // Spawns ffmpeg for one resolved stream and wires up detection for "says
 // it's playing but produces zero audio" — a stream URL that resolves fine
@@ -1003,6 +1007,30 @@ async function retryPlayback(guildId, next, excludeClients, previousAttemptNumbe
   const state = getState(guildId);
 
   if (previousAttemptNumber >= MAX_PLAYBACK_ATTEMPTS) {
+    // Every YouTube attempt in the budget failed to produce audio — this
+    // covers BOTH failure shapes, resolveTrack() itself throwing (every
+    // client rejected at the metadata stage) and a resolved stream that
+    // silently produced nothing once ffmpeg actually fetched it. Either
+    // way, SoundCloud always gets one final, guaranteed shot before
+    // actually giving up on the track — not only when resolveTrack's own
+    // YouTube ladder happened to be the thing that ran out. Marked
+    // excluded up front so this can only ever fire once per track.
+    if (!YOUTUBE_REGEX.test(next.query) && !excludeClients.has('soundcloud')) {
+      excludeClients.add('soundcloud');
+      try {
+        const track = await resolveFromSoundCloud(next.query);
+        console.error(`Music: YouTube gave up on "${next.query}" in guild ${guildId} — trying SoundCloud as a last resort.`);
+        next.title = track.title;
+        next.thumbnail = track.thumbnail;
+        next.duration = track.duration;
+        next.webpageUrl = track.webpageUrl;
+        playResolvedTrack(guildId, next, track, excludeClients, previousAttemptNumber + 1);
+        return;
+      } catch (err) {
+        console.error(`Music: SoundCloud last-resort also failed for "${next.query}" in guild ${guildId}:`, err.message);
+      }
+    }
+
     console.error(`Music: gave up on "${next.query}" in guild ${guildId} after ${previousAttemptNumber} source(s) with no audio.`);
     // Same "don't flood the channel" reasoning as the resolve-failure catch
     // below — automatic mode just moves on quietly, a real request still
