@@ -26,6 +26,7 @@ const { preloadAll } = require('./guildStore');
 const { setupBridgeListener } = require('./bridge');
 const { setupMusic } = require('./music');
 const { setupTicTacToe } = require('./ticTacToe');
+const { setupImposter } = require('./imposter');
 
 patchConsole();
 
@@ -93,6 +94,7 @@ client.once('ready', async () => {
   setupBridgeListener(client);
   setupMusic(client);
   setupTicTacToe(client);
+  setupImposter(client);
 
   setupCommandHandler(client, { client });
 });

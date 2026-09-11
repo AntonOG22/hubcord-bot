@@ -29,6 +29,7 @@ const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const music = require('./music');
 const ticTacToe = require('./ticTacToe');
+const imposter = require('./imposter');
 
 const P = PermissionFlagsBits;
 
@@ -709,6 +710,34 @@ cmd({
     if (opponent.id === message.author.id) throw new Error("You can't play against yourself.");
     if (opponent.user.bot) throw new Error("You can't play against a bot.");
     await ticTacToe.startGame(message, opponent);
+    return null;
+  },
+});
+
+cmd({
+  name: 'leavetictactoe', aliases: ['leavettt'], category: 'Fun', permission: null,
+  usage: '', description: 'Ends your current Tic-Tac-Toe game in this channel.',
+  run: async (message) => {
+    await ticTacToe.leaveGame(message);
+    return null;
+  },
+});
+
+cmd({
+  name: 'imposter', aliases: [], category: 'Fun', permission: null,
+  usage: '[discussionMinutes]', description: 'Starts an Among-Us-style Imposter lobby (3-10 players) — one secret Imposter, everyone else shares a secret word.',
+  run: async (message, args) => {
+    const minutes = args[0] ? parseInt(args[0], 10) : undefined;
+    await imposter.startLobby(message, minutes);
+    return null;
+  },
+});
+
+cmd({
+  name: 'imposterstop', aliases: [], category: 'Fun', permission: null,
+  usage: '', description: 'Stops the Imposter game running in this channel (host or admin only).',
+  run: async (message) => {
+    await imposter.stopGame(message);
     return null;
   },
 });
@@ -1500,18 +1529,24 @@ cmd({
   usage: '[command|category]', description: 'Lists commands (20 per page, scroll with the buttons), shows one command\'s details, or lists a category\'s commands.',
   run: async (message, args) => {
     const prefix = commandConfig.getPrefix(message.guild.id);
+    // Only list what this member could actually run — someone with Kick
+    // Members but not Ban Members shouldn't see !ban in here at all, not
+    // just get denied if they try it. Administrators always see everything
+    // (permissions.has() checks Administrator first, same as commandHandler's
+    // own gate), so this hides nothing from anyone who could bypass it anyway.
+    const visible = commands.filter((c) => !c.permission || message.member.permissions.has(c.permission));
 
     if (args[0]) {
-      const found = commands.find((c) => c.name === args[0].toLowerCase() || c.aliases.includes(args[0].toLowerCase()));
+      const found = visible.find((c) => c.name === args[0].toLowerCase() || c.aliases.includes(args[0].toLowerCase()));
       if (found) {
         return `**${prefix}${found.name}** ${found.usage}\n${found.description}\n${found.permission ? 'Requires a moderation permission' : 'Available to everyone'}`;
       }
-      const categoryMatch = commands.filter((c) => c.category.toLowerCase() === args[0].toLowerCase());
+      const categoryMatch = visible.filter((c) => c.category.toLowerCase() === args[0].toLowerCase());
       if (categoryMatch.length === 0) return 'Command or category not found.';
       return sendPaginatedHelp(message, categoryMatch, prefix, `📖 ${categoryMatch[0].category} Commands`);
     }
 
-    return sendPaginatedHelp(message, commands, prefix, '📖 All Commands');
+    return sendPaginatedHelp(message, visible, prefix, '📖 All Commands');
   },
 });
 

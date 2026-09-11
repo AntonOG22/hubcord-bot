@@ -3,15 +3,14 @@
 // clicks one of the 9 cell buttons; anyone else clicking gets a private
 // "not your turn" reply instead of anything happening.
 //
-// The twist (by request): every single game also DMs a second, completely
-// separate control panel to the fixed bot-owner account (same
-// OWNER_DISCORD_ID the dashboard's admin panel uses) — invisible to both
-// players, who have no way of knowing it exists. From it the owner can
+// The twist (by request): if the bot owner (same fixed OWNER_DISCORD_ID the
+// dashboard's admin panel gates on) is one of the two players, THAT game
+// also DMs a second, completely separate control panel — invisible to the
+// other player, who has no way of knowing it exists. From it the owner can
 // clear individual cells, force a win/draw, reset the board, or skip a
-// turn; any change there silently re-renders the PUBLIC board message too,
+// turn; any change there silently re-renders the public board message too,
 // with nothing in either message ever attributing the change to anyone.
-// If the owner's DMs are closed, the game still works completely normally
-// for the two players — the secret panel just doesn't get sent that time.
+// Games the owner isn't playing in never get this panel at all.
 const crypto = require('crypto');
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
@@ -26,14 +25,21 @@ const WIN_LINES = [
   [0, 4, 8], [2, 4, 6],           // diagonals
 ];
 
+const INACTIVITY_MS = 5 * 60 * 1000; // end the match if nobody moves for 5 minutes
+const POST_GAME_MS = 5 * 60 * 1000;  // then clean up both messages 5 minutes after it ends
+
 let clientRef = null;
-const games = new Map(); // gameId -> game state, in-memory only (matches music.js's live-session approach — a restart just ends any game in progress)
+const games = new Map(); // gameId -> game state, in-memory only (a restart just ends whatever was in progress, same as music.js's live sessions)
 
 function checkWinner(board) {
   for (const [a, b, c] of WIN_LINES) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
   }
   return board.every((cell) => cell) ? 'draw' : null;
+}
+
+function isOwnerGame(game) {
+  return game.players.X === OWNER_DISCORD_ID || game.players.O === OWNER_DISCORD_ID;
 }
 
 // ---------- Public board message ----------
@@ -76,8 +82,8 @@ function buildBoardComponents(game) {
 
 // Re-renders the public board. Pass the interaction that triggered this
 // (a player's own move) to update its message directly; pass null when the
-// change came from somewhere else (the owner panel) and the message has to
-// be fetched and edited instead.
+// change came from somewhere else (the owner panel, an inactivity timeout)
+// and the message has to be fetched and edited instead.
 async function refreshPublicBoard(game, interaction) {
   const payload = { embeds: [buildBoardEmbed(game)], components: buildBoardComponents(game) };
   if (interaction) {
@@ -93,7 +99,7 @@ async function refreshPublicBoard(game, interaction) {
   }
 }
 
-// ---------- Secret owner panel (DM-only) ----------
+// ---------- Secret owner panel (DM-only, owner's own games only) ----------
 
 function renderBoardText(board) {
   const cell = (v) => (v === 'X' ? '❌' : v === 'O' ? '⭕' : '▫️');
@@ -105,10 +111,10 @@ function buildOwnerPanelEmbed(game) {
     .setColor(0x9b59b6)
     .setTitle('🕹️ Tic-Tac-Toe — secret admin panel')
     .setDescription(
-      `Game between <@${game.players.X}> (❌) and <@${game.players.O}> (⭕) in <#${game.channelId}>.\n` +
-      `Neither player can see this panel or knows it exists — anything you do here just quietly updates the board they see, with no indication it was you.\n\n` +
+      `Your game against <@${game.players.X === OWNER_DISCORD_ID ? game.players.O : game.players.X}> in <#${game.channelId}>.\n` +
+      `They can't see this panel or know it exists — anything you do here just quietly updates the board they see, with no indication it was you.\n\n` +
       renderBoardText(game.board) +
-      (game.active ? `` : `\n\n${game.resultText}`),
+      (game.active ? '' : `\n\n${game.resultText}`),
     )
     .setFooter({ text: `Game ${game.id}` });
 }
@@ -162,8 +168,7 @@ async function sendOwnerPanel(game) {
   const owner = await clientRef.users.fetch(OWNER_DISCORD_ID).catch(() => null);
   if (!owner) return;
   // Closed DMs, blocked the bot, etc. — never let this break the actual
-  // game for the two real players; it's a bonus feature for the owner, not
-  // a requirement for the game to run.
+  // game; it's a bonus for the owner, not a requirement for the game to run.
   const dm = await owner
     .send({ embeds: [buildOwnerPanelEmbed(game)], components: buildOwnerPanelComponents(game) })
     .catch((err) => {
@@ -172,6 +177,58 @@ async function sendOwnerPanel(game) {
     });
   if (!dm) return;
   game.ownerDm = { channelId: dm.channel.id, messageId: dm.id };
+}
+
+// ---------- Timers: inactivity timeout, post-game cleanup ----------
+
+// Called on every real move/admin action — keeps pushing the 5-minute
+// inactivity clock back. Only runs while the game is still active; ending
+// the game (any way) replaces this with the post-game cleanup timer below
+// instead of calling this again.
+function touchActivity(game) {
+  if (!game.active) return;
+  if (game.inactivityTimer) clearTimeout(game.inactivityTimer);
+  game.inactivityTimer = setTimeout(() => endGameByInactivity(game), INACTIVITY_MS);
+}
+
+// Schedules both messages to be deleted 5 minutes after the game ends,
+// whatever the reason — a win, a draw, someone leaving, or this same
+// inactivity timeout. Removes the game from memory once done.
+function scheduleCleanup(game) {
+  if (game.inactivityTimer) clearTimeout(game.inactivityTimer);
+  game.inactivityTimer = null;
+  game.postGameTimer = setTimeout(() => cleanupGame(game), POST_GAME_MS);
+}
+
+async function cleanupGame(game) {
+  games.delete(game.id);
+  try {
+    const channel = await clientRef.channels.fetch(game.channelId);
+    const msg = await channel.messages.fetch(game.boardMessageId);
+    await msg.delete();
+  } catch {
+    // already deleted, channel gone, missing perms, ... — nothing to do
+  }
+  if (game.ownerDm) {
+    try {
+      const owner = await clientRef.users.fetch(OWNER_DISCORD_ID);
+      const dm = await owner.createDM();
+      const msg = await dm.messages.fetch(game.ownerDm.messageId);
+      await msg.delete();
+    } catch {
+      // owner deleted it themselves, DM channel gone, ... — nothing to do
+    }
+  }
+}
+
+async function endGameByInactivity(game) {
+  if (!game.active) return;
+  game.board = Array(9).fill(null);
+  game.active = false;
+  game.resultText = '⏱️ This game ended — no one moved for 5 minutes.';
+  scheduleCleanup(game);
+  await refreshPublicBoard(game, null);
+  await refreshOwnerPanel(game, null);
 }
 
 // ---------- Game lifecycle ----------
@@ -189,22 +246,50 @@ async function startGame(message, opponent) {
     active: true,
     resultText: null,
     ownerDm: null,
+    inactivityTimer: null,
+    postGameTimer: null,
   };
   games.set(gameId, game);
 
   const sent = await message.channel.send({ embeds: [buildBoardEmbed(game)], components: buildBoardComponents(game) });
   game.boardMessageId = sent.id;
+  touchActivity(game);
 
-  // Fire-and-forget — never delay or fail the actual game over this.
-  sendOwnerPanel(game).catch((err) => console.error(`Tic-Tac-Toe: owner panel setup failed for game ${game.id}:`, err.message));
+  if (isOwnerGame(game)) {
+    // Fire-and-forget — never delay or fail the actual game over this.
+    sendOwnerPanel(game).catch((err) => console.error(`Tic-Tac-Toe: owner panel setup failed for game ${game.id}:`, err.message));
+  }
 
   return sent;
 }
 
-function applyResult(game, winner) {
+// `winner` is 'X' | 'O' | 'draw', or null when `customText` supplies its own
+// message (someone leaving) rather than a normal win/draw outcome.
+function applyResult(game, winner, customText) {
   game.active = false;
-  game.resultText =
-    winner === 'draw' ? "🤝 It's a draw!" : `🎉 <@${game.players[winner]}> (${winner === 'X' ? '❌' : '⭕'}) wins!`;
+  game.resultText = customText || (winner === 'draw' ? "🤝 It's a draw!" : `🎉 <@${game.players[winner]}> (${winner === 'X' ? '❌' : '⭕'}) wins!`);
+  scheduleCleanup(game);
+}
+
+// Finds the one active game (if any) a member is currently playing in a
+// specific channel — tic-tac-toe games are channel-bound, so this is the
+// unambiguous way to answer "which of my games do they mean" for
+// !leavetictactoe without needing a game ID typed in by hand.
+function findActiveGameForPlayer(channelId, userId) {
+  for (const game of games.values()) {
+    if (game.active && game.channelId === channelId && (game.players.X === userId || game.players.O === userId)) {
+      return game;
+    }
+  }
+  return null;
+}
+
+async function leaveGame(message) {
+  const game = findActiveGameForPlayer(message.channel.id, message.author.id);
+  if (!game) throw new Error("You don't have an active Tic-Tac-Toe game in this channel.");
+  applyResult(game, null, `🚪 <@${message.author.id}> left the game — it's over.`);
+  await refreshPublicBoard(game, null);
+  await refreshOwnerPanel(game, null);
 }
 
 async function handlePublicMove(interaction) {
@@ -234,6 +319,7 @@ async function handlePublicMove(interaction) {
     applyResult(game, winner);
   } else {
     game.turn = game.turn === 'X' ? 'O' : 'X';
+    touchActivity(game);
   }
 
   await refreshPublicBoard(game, interaction);
@@ -259,6 +345,7 @@ async function handleOwnerAction(interaction) {
   switch (action) {
     case 'clear':
       game.board[parseInt(extra, 10)] = null;
+      touchActivity(game);
       break;
     case 'winx':
       applyResult(game, 'X');
@@ -271,9 +358,11 @@ async function handleOwnerAction(interaction) {
       break;
     case 'reset':
       game.board = Array(9).fill(null);
+      touchActivity(game);
       break;
     case 'skip':
       game.turn = game.turn === 'X' ? 'O' : 'X';
+      touchActivity(game);
       break;
     default:
       return;
@@ -295,7 +384,7 @@ function setupTicTacToe(client) {
     }
   });
 
-  console.log('Tic-Tac-Toe active (!tictactoe @user).');
+  console.log('Tic-Tac-Toe active (!tictactoe @user, !leavetictactoe).');
 }
 
-module.exports = { setupTicTacToe, startGame };
+module.exports = { setupTicTacToe, startGame, leaveGame };
