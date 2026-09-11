@@ -25,6 +25,7 @@ const { setupAiAutomod } = require('./aiAutomod');
 const { preloadAll } = require('./guildStore');
 const { setupBridgeListener } = require('./bridge');
 const { setupMusic } = require('./music');
+const { setupTicTacToe } = require('./ticTacToe');
 
 patchConsole();
 
@@ -91,6 +92,7 @@ client.once('ready', async () => {
   verificationGate.setupVerificationGate(client);
   setupBridgeListener(client);
   setupMusic(client);
+  setupTicTacToe(client);
 
   setupCommandHandler(client, { client });
 });

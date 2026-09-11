@@ -68,4 +68,28 @@ function randomCompliment() {
   return COMPLIMENTS[Math.floor(Math.random() * COMPLIMENTS.length)];
 }
 
-module.exports = { rollDice, coinFlip, randomQuote, randomTrivia, randomWouldYouRather, randomCompliment, eightBall };
+// TheCatAPI: free, keyless image search. Its mime_types=gif filter is only
+// loosely honored without an API key (roughly half the results still come
+// back as plain jpg photos) — fetching a batch and filtering for an actual
+// .gif URL client-side, rather than trusting the single top result, is what
+// keeps !cat from regularly posting a still photo instead of a gif. Two
+// attempts (30 candidates total) before giving up; never throws — a lookup
+// failure just means "no gif this time", handled by the caller.
+const CAT_GIF_API = 'https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=10';
+
+async function randomCatGif() {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(CAT_GIF_API, { headers: { 'User-Agent': 'hubcord-bot (Discord !cat command)' } });
+      if (!res.ok) continue;
+      const results = await res.json();
+      const gifs = Array.isArray(results) ? results.filter((r) => r.url && r.url.toLowerCase().endsWith('.gif')) : [];
+      if (gifs.length > 0) return gifs[Math.floor(Math.random() * gifs.length)].url;
+    } catch {
+      // network hiccup, bad JSON, ... — just try again / fall through below
+    }
+  }
+  return null;
+}
+
+module.exports = { rollDice, coinFlip, randomQuote, randomTrivia, randomWouldYouRather, randomCompliment, eightBall, randomCatGif };

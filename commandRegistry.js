@@ -28,6 +28,7 @@ const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const music = require('./music');
+const ticTacToe = require('./ticTacToe');
 
 const P = PermissionFlagsBits;
 
@@ -683,6 +684,33 @@ cmd({
   name: 'randomcolor', aliases: [], category: 'Fun', permission: null,
   usage: '', description: 'Generates a random hex color.',
   run: async () => `🎨 #${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0').toUpperCase()}`,
+});
+
+cmd({
+  name: 'cat', aliases: [], category: 'Fun', permission: null,
+  usage: '', description: 'Posts a random cat GIF.',
+  run: async () => {
+    const gifUrl = await funCommands.randomCatGif();
+    // Bare URL, not an embed — Discord auto-unfurls an image/gif link
+    // posted as plain message content into an inline preview, same as
+    // every other command here that just returns a string.
+    if (!gifUrl) throw new Error("Couldn't find a cat GIF right now — try again in a bit.");
+    return gifUrl;
+  },
+});
+
+cmd({
+  name: 'tictactoe', aliases: ['ttt'], category: 'Fun', permission: null,
+  usage: '<@opponent>', description: 'Starts a Tic-Tac-Toe game against another member.',
+  run: async (message, args) => {
+    if (args.length === 0) throw new Error('Mention someone to play against — e.g. `!tictactoe @user`.');
+    const opponent = await resolveMember(message, args[0]);
+    if (!opponent) throw new Error("Couldn't find that member.");
+    if (opponent.id === message.author.id) throw new Error("You can't play against yourself.");
+    if (opponent.user.bot) throw new Error("You can't play against a bot.");
+    await ticTacToe.startGame(message, opponent);
+    return null;
+  },
 });
 
 cmd({
