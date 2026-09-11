@@ -278,6 +278,7 @@ function getState(guildId) {
       looping: false,
       ffmpegProc: null,
       idleTimer: null,
+      awaitingRetry: false, // true while playResolvedTrack is retrying a silently-failed stream with a different client — see the player's Idle/error handlers above
       automatic: null, // { active, mood, startedBy, seen: Set<videoId> } while automatic mode is running
       lyricsLive: null, // { message, intervalId } while a !lyrics session is live-updating
     };
@@ -431,8 +432,16 @@ const RETRY_DELAY_MS = 1500;
 // either the resolved stdout or the last error. Shared by resolveTrack's
 // two passes — plain first, cookie-authenticated only as a fallback — so
 // the retry/backoff logic itself isn't duplicated between them.
-async function tryClientList(target, clientList, useCookies) {
-  const attempts = [...clientList, clientList[clientList.length - 1]];
+async function tryClientList(target, clientList, useCookies, excludeClients) {
+  // Skips whatever's already been tried in an earlier playback attempt for
+  // this same track (see playResolvedTrack/retryPlayback below) — retrying
+  // a track that produced silence with the exact same client would just
+  // reproduce the exact same silence.
+  const family = useCookies ? 'cookie' : 'plain';
+  const filtered = clientList.filter((c) => !excludeClients.has(`${family}:${c || 'default'}`));
+  if (filtered.length === 0) return { stdout: null, err: null, usedClient: null };
+
+  const attempts = [...filtered, filtered[filtered.length - 1]];
   let lastErr;
   clientLoop:
   for (let i = 0; i < attempts.length; i++) {
@@ -455,7 +464,7 @@ async function tryClientList(target, clientList, useCookies) {
           '-f', 'bestaudio/best',
           target,
         ]);
-        return { stdout, err: null };
+        return { stdout, err: null, usedClient: `${family}:${clients || 'default'}` };
       } catch (err) {
         lastErr = err;
         // Per-attempt, not just the final failure — otherwise there's no
@@ -473,24 +482,27 @@ async function tryClientList(target, clientList, useCookies) {
       }
     }
   }
-  return { stdout: null, err: lastErr };
+  return { stdout: null, err: lastErr, usedClient: null };
 }
 
-async function resolveTrack(query) {
+// `excludeClients`: a Set of "family:client" keys (see tryClientList) to
+// skip — used by retryPlayback below to force a genuinely different source
+// than one that already resolved fine but then produced no actual audio.
+async function resolveTrack(query, excludeClients = new Set()) {
   const isUrl = YOUTUBE_REGEX.test(query);
   const target = isUrl ? query : `ytsearch1:${query}`;
 
   // Plain (cookie-free) pass first — see YTDLP_CLIENT_FALLBACKS above for
   // why. Only falls through to a cookie-authenticated pass if that
-  // entirely failed AND cookies are actually configured; cookies rarely
-  // help anything the plain pass couldn't already resolve, so there's no
-  // reason to spend the extra requests when there's nothing to fall back
-  // to anyway.
-  let { stdout, err: lastErr } = await tryClientList(target, YTDLP_CLIENT_FALLBACKS, false);
-  if (lastErr && cookiesPath) {
-    ({ stdout, err: lastErr } = await tryClientList(target, YTDLP_COOKIE_FALLBACKS, true));
+  // entirely failed (or was fully excluded) AND cookies are actually
+  // configured; cookies rarely help anything the plain pass couldn't
+  // already resolve, so there's no reason to spend the extra requests when
+  // there's nothing to fall back to anyway.
+  let { stdout, err: lastErr, usedClient } = await tryClientList(target, YTDLP_CLIENT_FALLBACKS, false, excludeClients);
+  if (!stdout && cookiesPath) {
+    ({ stdout, err: lastErr, usedClient } = await tryClientList(target, YTDLP_COOKIE_FALLBACKS, true, excludeClients));
   }
-  if (lastErr) throw lastErr;
+  if (!stdout) throw lastErr || new Error(`No more sources to try for "${query}".`);
 
   const info = JSON.parse(stdout);
   const picked = info && info.entries ? info.entries[0] : info;
@@ -513,6 +525,7 @@ async function resolveTrack(query) {
     // just as often isn't formatted anything like that).
     artist: picked.artist || picked.uploader || picked.channel || null,
     track: picked.track || null,
+    usedClient,
   };
 }
 
@@ -789,10 +802,17 @@ async function ensureConnection(message) {
     });
 
     state.player.on(AudioPlayerStatus.Idle, () => {
+      // A silent-failure retry (see playResolvedTrack) already has its own
+      // exit handler deciding what to do next — the empty/failed resource
+      // ending also drives the player to Idle around the same time, which
+      // would otherwise race this generic handler into advancing the queue
+      // a second time (or ahead of the retry actually finishing).
+      if (state.awaitingRetry) return;
       killFfmpeg(state);
       playNext(guildId).catch((err) => console.error(`Music playNext failed in guild ${guildId}:`, err.message));
     });
     state.player.on('error', (err) => {
+      if (state.awaitingRetry) return;
       console.error(`Music player error in guild ${guildId}:`, err.message, err.stack || '');
       killFfmpeg(state);
       playNext(guildId).catch((e) => console.error(`Music playNext failed in guild ${guildId}:`, e.message));
@@ -818,6 +838,153 @@ async function ensureConnection(message) {
   state.textChannelId = message.channel.id;
   clearIdleTimer(state);
   return state;
+}
+
+// How many different clients to actually try getting real audio bytes from
+// (not just a resolvable URL — see below) before giving up on a track.
+const MAX_PLAYBACK_ATTEMPTS = 3;
+// Safety net for a stream that connects but never actually sends data.
+// ffmpeg's own -reconnect flags handle ordinary drops and it exits fast on
+// a definitive HTTP error (a 403 doesn't get "reconnected"); this only
+// exists for the rarer case of a connection that just hangs open silently.
+const AUDIO_START_TIMEOUT_MS = 15000;
+
+// Spawns ffmpeg for one resolved stream and wires up detection for "says
+// it's playing but produces zero audio" — a stream URL that resolves fine
+// as metadata but then gets silently blocked (a 403, most commonly) when
+// ffmpeg actually requests it. "Now playing" and playback-position
+// tracking only start once real audio bytes are actually flowing, not at
+// spawn time — announcing immediately (the old behavior) is exactly what
+// made this failure look like "the bot says it's playing but nothing
+// plays": the announcement had already gone out before the silence was
+// even detected. If this attempt produces nothing, automatically
+// re-resolves with a different client (excluding every client already
+// tried for this track) and tries again, up to MAX_PLAYBACK_ATTEMPTS,
+// before finally giving up and skipping to the next queue entry.
+function playResolvedTrack(guildId, next, track, excludeClients, attemptNumber) {
+  const state = getState(guildId);
+  // A retry can land here well after an async resolveTrack() call — if the
+  // user ran !stop (or the bot got disconnected) in the meantime, there's
+  // no player left to hand a resource to; bail out instead of throwing on
+  // state.player.play() against a null player.
+  if (!state.player || !state.connection) return;
+  state.awaitingRetry = false; // actively attempting playback again now, not just waiting on a decision
+  killFfmpeg(state);
+  const proc = spawnFfmpegPcm(track.streamUrl, track.httpHeaders);
+  state.ffmpegProc = proc;
+
+  let stderrTail = '';
+  proc.stderr?.on('data', (chunk) => {
+    stderrTail = (stderrTail + chunk.toString()).slice(-2000); // keep it bounded, we only need the last error
+  });
+  proc.on('error', (err) => console.error(`ffmpeg failed to start for guild ${guildId}:`, err.message));
+
+  let gotAudio = false;
+  const audioTimeout = setTimeout(() => {
+    if (gotAudio || state.ffmpegProc !== proc) return;
+    console.error(`Music: attempt ${attemptNumber}/${MAX_PLAYBACK_ATTEMPTS} timed out waiting for audio for "${track.title}" (client ${track.usedClient}) in guild ${guildId} — trying a different source.`);
+    try { proc.kill('SIGKILL'); } catch { /* already dead */ } // its 'exit' handler below drives the actual retry
+  }, AUDIO_START_TIMEOUT_MS);
+
+  proc.stdout.once('data', () => {
+    gotAudio = true;
+    clearTimeout(audioTimeout);
+    state.awaitingRetry = false; // confirmed real audio — the generic Idle/error handlers can resume handling this song normally
+
+    // Playback-position tracking, for !nowplaying's progress bar and
+    // !lyrics' current-line sync. pausedAccumMs/pausedSince (see pause()/
+    // resume()) subtract out any time spent paused.
+    next.playbackStartedAt = Date.now();
+    next.pausedAccumMs = 0;
+    state.pausedSince = null;
+
+    if (getSettings(guildId).announceNowPlaying && state.textChannelId && clientRef) {
+      clientRef.channels.fetch(state.textChannelId)
+        .then((channel) => {
+          if (!channel) return;
+          const embed = new EmbedBuilder()
+            .setColor(0x3ecf8e)
+            .setTitle('▶️ Now playing')
+            .setDescription(`**${track.title}**${next.requestedBy ? `\nRequested by <@${next.requestedBy}>` : ''}`)
+            .setFooter(brandFooter(clientRef, guildId));
+          if (track.thumbnail) embed.setThumbnail(track.thumbnail);
+          if (track.webpageUrl) embed.setURL(track.webpageUrl);
+          return channel.send({ embeds: [embed] });
+        })
+        .catch(() => {});
+    }
+
+    // Top the queue back up in the background once it's running low, so
+    // playback doesn't visibly stall waiting on a search every single time
+    // it happens to run dry — this fires "ahead of time" instead.
+    const atHome = !state.automatic?.active || !state.automatic.homeChannelId || state.connection?.joinConfig.channelId === state.automatic.homeChannelId;
+    if (state.automatic?.active && atHome) {
+      const automaticQueued = state.queue.filter((e) => e.isAutomatic).length;
+      if (automaticQueued < AUTOMATIC_REFILL_AHEAD) {
+        refillAutomaticQueue(guildId).catch((err) => console.error(`Automatic mode refill failed for guild ${guildId}:`, err.message));
+      }
+    }
+  });
+
+  proc.once('exit', (code, signal) => {
+    clearTimeout(audioTimeout);
+    // Already succeeded, or superseded by a skip/stop/later retry attempt
+    // in the meantime — nothing to do.
+    if (gotAudio || state.ffmpegProc !== proc) return;
+    console.error(`Music: attempt ${attemptNumber}/${MAX_PLAYBACK_ATTEMPTS} produced no audio for "${track.title}" (client ${track.usedClient}) in guild ${guildId} (exit code=${code} signal=${signal}): ${stderrTail.trim() || '(no stderr output)'}`);
+    // Set before retryPlayback (not inside it) — the empty resource ending
+    // can drive the player to Idle in this same tick, and that check needs
+    // to already see this as true.
+    state.awaitingRetry = true;
+    retryPlayback(guildId, next, excludeClients, attemptNumber).catch((err) => console.error(`Music: retry failed in guild ${guildId}:`, err.message));
+  });
+
+  const resource = createAudioResource(proc.stdout, { inputType: StreamType.Raw, inlineVolume: true });
+  resource.volume.setVolume((state.volume ?? getSettings(guildId).defaultVolume) / 100);
+  state.currentResource = resource;
+  state.player.play(resource);
+}
+
+async function retryPlayback(guildId, next, excludeClients, previousAttemptNumber) {
+  const state = getState(guildId);
+
+  if (previousAttemptNumber >= MAX_PLAYBACK_ATTEMPTS) {
+    console.error(`Music: gave up on "${next.query}" in guild ${guildId} after ${previousAttemptNumber} source(s) with no audio.`);
+    // Same "don't flood the channel" reasoning as the resolve-failure catch
+    // below — automatic mode just moves on quietly, a real request still
+    // gets told.
+    if (!next.isAutomatic && state.textChannelId && clientRef) {
+      clientRef.channels.fetch(state.textChannelId)
+        .then((ch) => ch?.send(`⚠️ Couldn't get any audio for **${next.title || next.query}** after trying multiple sources — skipping.`))
+        .catch(() => {});
+    }
+    state.awaitingRetry = false; // giving up ourselves now — let the normal Idle/error handling apply again from here on
+    killFfmpeg(state);
+    playNext(guildId).catch((err) => console.error(`Music playNext failed in guild ${guildId}:`, err.message));
+    return;
+  }
+
+  try {
+    const track = await resolveTrack(next.query, excludeClients);
+    excludeClients.add(track.usedClient);
+    next.title = track.title;
+    next.thumbnail = track.thumbnail;
+    next.duration = track.duration;
+    next.webpageUrl = track.webpageUrl;
+    playResolvedTrack(guildId, next, track, excludeClients, previousAttemptNumber + 1);
+  } catch (err) {
+    // Genuinely nothing left to try (every client excluded, or a real
+    // resolve error this time) — same handling as a first-attempt failure.
+    console.error(`Music: couldn't resolve a fallback source for "${next.query}" in guild ${guildId}:`, err.message);
+    if (!next.isAutomatic && state.textChannelId && clientRef) {
+      clientRef.channels.fetch(state.textChannelId)
+        .then((ch) => ch?.send(`⚠️ Couldn't play "${next.query}": ${err.message} — skipping.`))
+        .catch(() => {});
+    }
+    state.awaitingRetry = false;
+    killFfmpeg(state);
+    playNext(guildId).catch((e) => console.error(`Music playNext failed in guild ${guildId}:`, e.message));
+  }
 }
 
 async function playNext(guildId) {
@@ -908,70 +1075,11 @@ async function playNext(guildId) {
 
     recordHistory(guildId, track, next);
 
-    killFfmpeg(state);
-    const proc = spawnFfmpegPcm(track.streamUrl, track.httpHeaders);
-    state.ffmpegProc = proc;
-
-    let stderrTail = '';
-    proc.stderr?.on('data', (chunk) => {
-      stderrTail = (stderrTail + chunk.toString()).slice(-2000); // keep it bounded, we only need the last error
-    });
-    proc.on('error', (err) => console.error(`ffmpeg failed to start for guild ${guildId}:`, err.message));
-
-    // ffmpeg can exit 0 bytes written (e.g. a 403 from YouTube fetching the
-    // stream URL) without ever emitting a player 'error' — @discordjs/voice
-    // just sees an empty stream end and goes Idle, which looked from the
-    // outside exactly like "says it's playing, plays nothing". Track
-    // whether any audio actually made it out of ffmpeg so a silent failure
-    // gets reported instead of quietly moving on.
-    let gotAudio = false;
-    proc.stdout.once('data', () => { gotAudio = true; });
-    proc.once('exit', (code, signal) => {
-      if (!gotAudio && state.ffmpegProc === proc) {
-        console.error(`ffmpeg produced no audio for guild ${guildId} (exit code=${code} signal=${signal}): ${stderrTail.trim() || '(no stderr output)'}`);
-        if (state.textChannelId && clientRef) {
-          clientRef.channels.fetch(state.textChannelId)
-            .then((ch) => ch?.send(`⚠️ Couldn't fetch audio for **${track.title}** — skipping.`))
-            .catch(() => {});
-        }
-      }
-    });
-
-    const resource = createAudioResource(proc.stdout, { inputType: StreamType.Raw, inlineVolume: true });
-    resource.volume.setVolume((state.volume ?? getSettings(guildId).defaultVolume) / 100);
-    state.currentResource = resource;
-    state.player.play(resource);
-
-    // Playback-position tracking, for !nowplaying's progress bar and
-    // !lyrics' current-line sync. pausedAccumMs/pausedSince (see pause()/
-    // resume()) subtract out any time spent paused.
-    next.playbackStartedAt = Date.now();
-    next.pausedAccumMs = 0;
-    state.pausedSince = null;
-
-    if (getSettings(guildId).announceNowPlaying && state.textChannelId && clientRef) {
-      const channel = await clientRef.channels.fetch(state.textChannelId).catch(() => null);
-      if (channel) {
-        const embed = new EmbedBuilder()
-          .setColor(0x3ecf8e)
-          .setTitle('▶️ Now playing')
-          .setDescription(`**${track.title}**${next.requestedBy ? `\nRequested by <@${next.requestedBy}>` : ''}`)
-          .setFooter(brandFooter(clientRef, guildId));
-        if (track.thumbnail) embed.setThumbnail(track.thumbnail);
-        if (track.webpageUrl) embed.setURL(track.webpageUrl);
-        await channel.send({ embeds: [embed] }).catch(() => {});
-      }
-    }
-
-    // Top the queue back up in the background once it's running low, so
-    // playback doesn't visibly stall waiting on a search every single time
-    // it happens to run dry — this fires "ahead of time" instead.
-    if (state.automatic?.active && atAutomaticHome) {
-      const automaticQueued = state.queue.filter((e) => e.isAutomatic).length;
-      if (automaticQueued < AUTOMATIC_REFILL_AHEAD) {
-        refillAutomaticQueue(guildId).catch((err) => console.error(`Automatic mode refill failed for guild ${guildId}:`, err.message));
-      }
-    }
+    // Kicks off the actual ffmpeg spawn + audio-detection + retry-with-a-
+    // different-client chain (see playResolvedTrack below) — not awaited,
+    // it wires up listeners and returns once playback has started, same as
+    // the inline code this replaced.
+    playResolvedTrack(guildId, next, track, new Set([track.usedClient]), 1);
   } catch (err) {
     // Logged server-side too, not just posted to Discord — the Discord
     // message alone (which is all this used to do) meant a resolve failure
@@ -1176,6 +1284,17 @@ function stopAutomatic(guildId) {
 function skip(guildId) {
   const state = getState(guildId);
   if (!state.player) return false;
+  if (state.awaitingRetry) {
+    // A silent-failure retry is mid-flight for the current track — the
+    // Idle handler is deliberately ignoring player-idle events right now
+    // (see playResolvedTrack) so it doesn't race that retry, which would
+    // otherwise silently swallow this skip too. Abandon the retry and move
+    // on immediately instead.
+    state.awaitingRetry = false;
+    killFfmpeg(state);
+    playNext(guildId).catch((err) => console.error(`Music playNext failed in guild ${guildId}:`, err.message));
+    return true;
+  }
   state.player.stop(true); // triggers the Idle handler -> playNext
   return true;
 }
@@ -1253,6 +1372,7 @@ function stop(guildId) {
   state.queue = [];
   state.current = null;
   state.looping = false;
+  state.awaitingRetry = false;
   killFfmpeg(state);
   if (state.player) { try { state.player.stop(true); } catch { /* ignore */ } }
   if (state.connection) { try { state.connection.destroy(); } catch { /* ignore */ } }
