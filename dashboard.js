@@ -99,7 +99,8 @@ function buildOfficialAnnouncementEmbed(client, { title, message }) {
 // cannot forge or edit that cookie without the signing secret, so there is no
 // request the browser can construct that passes this check while lying about
 // who's logged in — this is a real server-side gate, not a UI toggle.
-const OWNER_DISCORD_ID = '1496498092004868279';
+// Shared with ownerProtection.js so every module agrees on the same ID.
+const { OWNER_DISCORD_ID } = require('./ownerProtection');
 
 // Discord's user-guilds endpoint is rate-limited and doesn't change often — cache
 // each user's guild list for a short window instead of re-fetching on every request.

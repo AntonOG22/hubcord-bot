@@ -937,7 +937,20 @@ function playResolvedTrack(guildId, next, track, excludeClients, attemptNumber) 
     try { proc.kill('SIGKILL'); } catch { /* already dead */ } // its 'exit' handler below drives the actual retry
   }, AUDIO_START_TIMEOUT_MS);
 
-  proc.stdout.once('data', () => {
+  // A single stray byte (or a tiny garbled chunk — e.g. a malformed HLS
+  // segment) used to be enough to call a stream "confirmed working", which
+  // could still leave the player sitting in real silence: a live report
+  // showed the player genuinely reach Playing for a full 30s with nothing
+  // audible. Requiring a real amount of sustained data first (s16le/48kHz/
+  // stereo, so this is under 200ms of actual audio) before treating the
+  // stream as good rules that out without adding noticeable startup delay.
+  const MIN_AUDIO_BYTES = 32000;
+  let audioBytes = 0;
+  const onStdoutData = (chunk) => {
+    if (gotAudio) return;
+    audioBytes += chunk.length;
+    if (audioBytes < MIN_AUDIO_BYTES) return;
+    proc.stdout.off('data', onStdoutData);
     gotAudio = true;
     clearTimeout(audioTimeout);
     state.awaitingRetry = false; // confirmed real audio — the generic Idle/error handlers can resume handling this song normally
@@ -982,7 +995,8 @@ function playResolvedTrack(guildId, next, track, excludeClients, attemptNumber) 
         refillAutomaticQueue(guildId).catch((err) => console.error(`Automatic mode refill failed for guild ${guildId}:`, err.message));
       }
     }
-  });
+  };
+  proc.stdout.on('data', onStdoutData);
 
   proc.once('exit', (code, signal) => {
     clearTimeout(audioTimeout);

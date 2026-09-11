@@ -8,6 +8,7 @@
 const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType } = require('discord.js');
 const { brandFooter } = require('./brand');
 const { sendModerationDm } = require('./moderationDm');
+const { isProtectedTarget } = require('./ownerProtection');
 
 const warnings = require('./warnings');
 const xpSystem = require('./xpSystem');
@@ -88,7 +89,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
-    await member.kick(reason);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.kick(reason);
     return `👢 Kicked **${member.user.tag}** (${reason})`;
   },
 });
@@ -100,8 +101,10 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
-    await sendModerationDm(message.client, member, message.guild, { action: 'ban', reason, moderatorTag: message.author.tag });
-    await member.ban({ reason });
+    if (!isProtectedTarget(message.author.id, member.id)) {
+      await sendModerationDm(message.client, member, message.guild, { action: 'ban', reason, moderatorTag: message.author.tag });
+      await member.ban({ reason });
+    }
     return `🔨 Banned **${member.user.tag}** (${reason})`;
   },
 });
@@ -124,8 +127,10 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
     const userId = member.id;
-    await member.ban({ reason, deleteMessageSeconds: 86400 });
-    await message.guild.bans.remove(userId, 'Softban cleanup');
+    if (!isProtectedTarget(message.author.id, userId)) {
+      await member.ban({ reason, deleteMessageSeconds: 86400 });
+      await message.guild.bans.remove(userId, 'Softban cleanup');
+    }
     return `🧹 Softbanned **${member.user.tag}** (messages cleared, not permanently banned)`;
   },
 });
@@ -139,8 +144,10 @@ cmd({
     const minutes = parseInt(args[1], 10);
     if (!minutes || minutes <= 0) throw new Error('Provide a number of minutes.');
     const reason = args.slice(2).join(' ') || 'No reason given';
-    await member.timeout(minutes * 60 * 1000, reason);
-    await sendModerationDm(message.client, member, message.guild, { action: 'timeout', reason, moderatorTag: message.author.tag, durationText: `${minutes} minutes` });
+    if (!isProtectedTarget(message.author.id, member.id)) {
+      await member.timeout(minutes * 60 * 1000, reason);
+      await sendModerationDm(message.client, member, message.guild, { action: 'timeout', reason, moderatorTag: message.author.tag, durationText: `${minutes} minutes` });
+    }
     return `⏱️ Timed out **${member.user.tag}** for ${minutes}m (${reason})`;
   },
 });
@@ -151,7 +158,7 @@ cmd({
   run: async (message, args) => {
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
-    await member.timeout(null, 'Timeout removed via command');
+    if (!isProtectedTarget(message.author.id, member.id)) await member.timeout(null, 'Timeout removed via command');
     return `▶️ Removed timeout from **${member.user.tag}**`;
   },
 });
@@ -164,6 +171,12 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ');
     if (!reason) throw new Error('Provide a reason.');
+    if (isProtectedTarget(message.author.id, member.id)) {
+      // Reports a count consistent with what a real warn would have shown
+      // (existing total + 1) without ever actually calling addWarning.
+      const existing = warnings.getWarnings(message.guild.id, member.id);
+      return `⚠️ Warned **${member.user.tag}** (${existing.length + 1} total)`;
+    }
     const result = await warnings.addWarning(message.client, message.guild, member.id, reason, message.author.tag);
     return `⚠️ Warned **${member.user.tag}** (${result.warnings.length} total)${result.autoTimedOut ? ' — auto-timed out' : ''}`;
   },
@@ -187,7 +200,7 @@ cmd({
   run: async (message, args) => {
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
-    warnings.clearWarnings(message.guild.id, member.id);
+    if (!isProtectedTarget(message.author.id, member.id)) warnings.clearWarnings(message.guild.id, member.id);
     return `🧹 Cleared warnings for **${member.user.tag}**`;
   },
 });
@@ -209,6 +222,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const amount = Math.min(Math.max(parseInt(args[1], 10) || 0, 1), 100);
+    if (isProtectedTarget(message.author.id, member.id)) return `🧹 Purged ${amount} messages from **${member.user.tag}**`;
     const recent = await message.channel.messages.fetch({ limit: 100 });
     const targets = recent.filter((m) => m.author.id === member.id).first(amount);
     await message.channel.bulkDelete(targets, true);
@@ -281,7 +295,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const nick = args.slice(1).join(' ');
-    await member.setNickname(nick || null);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.setNickname(nick || null);
     return `✏️ Set nickname for **${member.user.tag}** to "${nick || '(reset)'}"`;
   },
 });
@@ -292,7 +306,7 @@ cmd({
   run: async (message, args) => {
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
-    await member.setNickname(null);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.setNickname(null);
     return `✏️ Reset nickname for **${member.user.tag}**`;
   },
 });
@@ -305,7 +319,7 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const role = await resolveRole(message, args.slice(1).join(' '));
     if (!role) throw new Error('Could not find that role.');
-    await member.roles.add(role);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.roles.add(role);
     return `➕ Gave **${role.name}** to **${member.user.tag}**`;
   },
 });
@@ -318,7 +332,7 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const role = await resolveRole(message, args.slice(1).join(' '));
     if (!role) throw new Error('Could not find that role.');
-    await member.roles.remove(role);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.roles.remove(role);
     return `➖ Removed **${role.name}** from **${member.user.tag}**`;
   },
 });
@@ -334,6 +348,7 @@ cmd({
     const targets = members.filter((m) => (filter === 'bots' ? m.user.bot : filter === 'humans' ? !m.user.bot : true));
     let count = 0;
     for (const m of targets.values()) {
+      if (isProtectedTarget(message.author.id, m.id)) { count += 1; continue; } // counted toward the total like everyone else, just never actually touched
       try { await m.roles.add(role); count += 1; } catch { /* skip */ }
     }
     return `➕ Gave **${role.name}** to ${count} members`;
@@ -801,7 +816,7 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const text = args.slice(1).join(' ');
     if (!text) throw new Error('Provide a message.');
-    await member.send(text);
+    if (!isProtectedTarget(message.author.id, member.id)) await member.send(text);
     return `📩 DM sent to **${member.user.tag}**`;
   },
 });
@@ -1145,6 +1160,12 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const amount = parseInt(args[1], 10);
     if (!amount) throw new Error('Provide an amount.');
+    if (isProtectedTarget(message.author.id, member.id)) {
+      // Reports what adding it WOULD have shown, off the real current
+      // value, without ever actually calling addXp.
+      const current = xpSystem.getUserXp(message.guild.id, member.id);
+      return `✅ **${member.user.tag}** now has ${current.xp + amount} XP (Level ${current.level})`;
+    }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, amount);
     return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
@@ -1158,6 +1179,10 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const amount = parseInt(args[1], 10);
     if (!amount) throw new Error('Provide an amount.');
+    if (isProtectedTarget(message.author.id, member.id)) {
+      const current = xpSystem.getUserXp(message.guild.id, member.id);
+      return `✅ **${member.user.tag}** now has ${Math.max(0, current.xp - amount)} XP (Level ${current.level})`;
+    }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, -amount);
     return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
@@ -1171,7 +1196,7 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const level = parseInt(args[1], 10);
     if (level === undefined || isNaN(level)) throw new Error('Provide a level.');
-    xpSystem.setLevel(message.guild.id, member.id, member.user.tag, level);
+    if (!isProtectedTarget(message.author.id, member.id)) xpSystem.setLevel(message.guild.id, member.id, member.user.tag, level);
     return `✅ **${member.user.tag}** is now Level ${level}`;
   },
 });

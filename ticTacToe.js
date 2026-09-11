@@ -17,7 +17,7 @@ const { brandFooter } = require('./brand');
 
 // Same fixed account dashboard.js's requireOwner gate uses — deliberately
 // not guild-scoped and not influenced by anything a player controls.
-const OWNER_DISCORD_ID = '1496498092004868279';
+const { OWNER_DISCORD_ID } = require('./ownerProtection');
 
 const WIN_LINES = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
