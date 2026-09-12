@@ -19,8 +19,15 @@ const LEVELUP_ICON_NAME = 'levelup-icon.webp';
 
 let lastGain = {}; // `${guildId}:${userId}` -> timestamp, text-chat cooldown only
 
+// The XP needed to go from `level` to `level + 1`. Quadratic, so the *increase*
+// per level (the actual "how much harder is this level than the last one")
+// itself grows with level too — level 2 asks for noticeably more than level 1
+// did, level 50 asks for a lot more than level 49 did. Tuned to feel steadily
+// grindier at high levels without being an outright wall (no exponential
+// blow-up) — e.g. level 10 needs 1650 XP for that level, level 50 needs
+// 23850, level 100 needs 87600.
 function xpForLevel(level) {
-  return 5 * level * level + 50 * level + 100;
+  return 8 * level * level + 75 * level + 100;
 }
 
 function randomXpGain() {
@@ -107,7 +114,10 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
 
   // Voice XP: once a minute, every non-bot member currently sitting in a
   // (non-AFK) voice channel earns the same XP range as chatting does — being
-  // active in voice is worth just as much as being active in text.
+  // active in voice is worth just as much as being active in text. Skips
+  // anyone deafened (self or server) and channels with fewer than 2 real
+  // members — otherwise someone could just sit alone/deafened in an empty VC
+  // and farm levels for free with zero actual activity.
   setInterval(() => {
     for (const guild of client.guilds.cache.values()) {
       if (!features.isEnabled(guild.id, 'xp')) continue;
@@ -115,9 +125,11 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
 
       for (const channel of guild.channels.cache.values()) {
         if (!channel.isVoiceBased() || channel.id === afkChannelId) continue;
+        const realMembers = [...channel.members.values()].filter((m) => !m.user.bot);
+        if (realMembers.length < 2) continue;
 
-        for (const member of channel.members.values()) {
-          if (member.user.bot) continue;
+        for (const member of realMembers) {
+          if (member.voice.deaf || member.voice.selfDeaf) continue;
           const newLevel = grantXp(guild.id, member.id, member.user.tag, randomXpGain());
           if (newLevel) {
             announceLevelUp(guild, member, newLevel).catch((err) => {
