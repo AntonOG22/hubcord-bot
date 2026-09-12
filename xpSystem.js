@@ -34,6 +34,18 @@ function randomXpGain() {
   return Math.floor(Math.random() * (MAX_XP - MIN_XP + 1)) + MIN_XP;
 }
 
+// The highest multiplier among the member's roles that have one configured —
+// deliberately the highest rather than stacking all of them, so e.g. having
+// both a "Booster" (1.5x) and a "VIP" (2x) role gives 2x, not 3x. 1 (no
+// boost) if the server hasn't configured any role multipliers, or the member
+// doesn't have any of the configured roles.
+function getRoleMultiplier(guildId, member) {
+  const multipliers = guildConfig.getConfig(guildId).xpRoleMultipliers || [];
+  if (!multipliers.length) return 1;
+  const applicable = multipliers.filter((m) => member.roles.cache.has(m.roleId)).map((m) => m.multiplier);
+  return applicable.length ? Math.max(...applicable) : 1;
+}
+
 // Adds XP to a user's stored total and levels them up as many times as the new
 // total covers. Returns the new level if they leveled up at least once this
 // call, otherwise null — shared by both the text-message and voice-tick paths.
@@ -59,7 +71,7 @@ function grantXp(guildId, userId, tag, amount) {
 // used only when no level-up channel is configured, so text level-ups never
 // silently go nowhere. Voice-triggered level-ups have no such channel, so they
 // fall back to the configured channel or the server's system channel instead.
-async function announceLevelUp(guild, member, level, fallbackChannel = null) {
+async function announceLevelUp(guild, member, level, fallbackChannel = null, multiplier = 1) {
   try {
     const levelUpChannelId = guildConfig.getConfig(guild.id).levelUpChannelId;
     let target = fallbackChannel;
@@ -74,12 +86,16 @@ async function announceLevelUp(guild, member, level, fallbackChannel = null) {
     if (!target) target = guild.systemChannel;
 
     if (target) {
+      const footerText =
+        multiplier > 1
+          ? `Earn more XP by sending messages & talking in voice channels • ${multiplier}x XP boost active`
+          : 'Earn more XP by sending messages & talking in voice channels';
       const embed = new EmbedBuilder()
         .setColor(0x57f287)
         .setAuthor({ name: member.displayName, iconURL: member.displayAvatarURL() })
         .setThumbnail(`attachment://${LEVELUP_ICON_NAME}`)
         .setDescription(`You reached XP level **${level}**, ${member}!`)
-        .setFooter({ text: 'Earn more XP by sending messages & talking in voice channels' });
+        .setFooter({ text: footerText });
       const attachment = new AttachmentBuilder(LEVELUP_ICON_PATH, { name: LEVELUP_ICON_NAME });
       // The mention inside the embed's description doesn't ping (Discord never
       // notifies for mentions rendered inside embeds) — this extra plain-text
@@ -106,9 +122,10 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
     if (now - (lastGain[key] || 0) < COOLDOWN_MS) return;
     lastGain[key] = now;
 
-    const newLevel = grantXp(message.guild.id, message.author.id, message.author.tag, randomXpGain());
+    const multiplier = message.member ? getRoleMultiplier(message.guild.id, message.member) : 1;
+    const newLevel = grantXp(message.guild.id, message.author.id, message.author.tag, Math.round(randomXpGain() * multiplier));
     if (newLevel && message.member) {
-      await announceLevelUp(message.guild, message.member, newLevel, message.channel);
+      await announceLevelUp(message.guild, message.member, newLevel, message.channel, multiplier);
     }
   });
 
@@ -117,22 +134,27 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
   // active in voice is worth just as much as being active in text. Skips
   // anyone deafened (self or server) and channels with fewer than 2 real
   // members — otherwise someone could just sit alone/deafened in an empty VC
-  // and farm levels for free with zero actual activity.
+  // and farm levels for free with zero actual activity. The server's chosen
+  // double-XP voice channel (if any) doubles this on top of any role
+  // multiplier the member already has.
   setInterval(() => {
     for (const guild of client.guilds.cache.values()) {
       if (!features.isEnabled(guild.id, 'xp')) continue;
       const afkChannelId = guild.afkChannelId;
+      const doubleXpChannelId = guildConfig.getConfig(guild.id).doubleXpVoiceChannelId;
 
       for (const channel of guild.channels.cache.values()) {
         if (!channel.isVoiceBased() || channel.id === afkChannelId) continue;
         const realMembers = [...channel.members.values()].filter((m) => !m.user.bot);
         if (realMembers.length < 2) continue;
 
+        const channelMultiplier = channel.id === doubleXpChannelId ? 2 : 1;
         for (const member of realMembers) {
           if (member.voice.deaf || member.voice.selfDeaf) continue;
-          const newLevel = grantXp(guild.id, member.id, member.user.tag, randomXpGain());
+          const multiplier = getRoleMultiplier(guild.id, member) * channelMultiplier;
+          const newLevel = grantXp(guild.id, member.id, member.user.tag, Math.round(randomXpGain() * multiplier));
           if (newLevel) {
-            announceLevelUp(guild, member, newLevel).catch((err) => {
+            announceLevelUp(guild, member, newLevel, null, multiplier).catch((err) => {
               console.error('Voice level-up announcement failed:', err.message);
             });
           }

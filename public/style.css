@@ -1204,6 +1204,15 @@ input[type="radio"]:checked::after {
   width: 100%;
 }
 
+.xp-multiplier-row {
+  grid-template-columns: 2fr 1fr auto;
+}
+
+.xp-multiplier-row select,
+.xp-multiplier-row input {
+  width: 100%;
+}
+
 .command-category {
   margin-top: 18px;
 }

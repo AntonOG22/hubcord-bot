@@ -16,6 +16,8 @@ const store = makeGuildStore('guild-config.json', () => ({
   levelRolesEnabled: false, // opt-in: auto-create & assign tier roles (Level 1-4, 5-24, ...) as members level up
   levelRoleTiers: null, // null = use levelRoles.js's DEFAULT_TIERS; otherwise an array of {minLevel, maxLevel, name} set from the dashboard
   levelRoleMap: {}, // tier name -> role ID, filled in once the tier roles are auto-created
+  doubleXpVoiceChannelId: null, // optional: being in this one voice channel doubles voice XP gains
+  xpRoleMultipliers: [], // up to 10 {roleId, multiplier} — highest applicable multiplier wins if a member has more than one
   watermarkDisabled: false, // per-server opt-out of the "Emerald" footer, set from the admin panel. Official announcements/broadcasts are never affected — they use their own fixed "verified official" footer specifically to prove they came from the real bot.
   language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
   disabledFeatures: [], // feature keys turned off for this server — see features.js

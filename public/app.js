@@ -621,6 +621,26 @@ async function populateChannelSelect(selectEl, { withNone } = {}) {
   }
 }
 
+async function populateVoiceChannelSelect(selectEl, { withNone } = {}) {
+  const res = await api('/api/voice-channels');
+  if (!res.ok) return;
+  const channels = await res.json();
+
+  selectEl.innerHTML = '';
+  if (withNone) {
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '— none —';
+    selectEl.appendChild(none);
+  }
+  for (const c of channels) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.parent ? `${c.parent} / ${c.name}` : c.name;
+    selectEl.appendChild(opt);
+  }
+}
+
 async function populateCategorySelect(selectEl, { withNone } = {}) {
   const res = await api('/api/categories');
   if (!res.ok) return;
@@ -1180,6 +1200,7 @@ function refreshEverything() {
   refreshRolePanels();
   refreshGuildSettings();
   refreshLevelRoles();
+  refreshXpBoosts();
   refreshJoinLeaveConfig();
   refreshFeatureToggles();
   refreshTicketConfig();
@@ -2936,6 +2957,61 @@ document.getElementById('level-roles-save-btn').addEventListener('click', async 
     setFeedback(feedback, enabled ? 'Saved — tier roles created/synced!' : 'Saved.', true);
     refreshAuditLog();
     refreshLevelRoles();
+  } else {
+    const data = await res.json().catch(() => ({}));
+    setFeedback(feedback, data.error || 'Failed to save.', false);
+  }
+});
+
+// ---------- XP boosts (double-XP voice channel + role multipliers) ----------
+
+let xpBoostRolesCache = [];
+
+function renderXpMultiplierRow(entry = { roleId: '', multiplier: '' }) {
+  const row = document.createElement('div');
+  row.className = 'level-role-tier-row xp-multiplier-row';
+  const roleOptions = xpBoostRolesCache
+    .map((r) => `<option value="${escapeHtml(r.id)}" ${r.id === entry.roleId ? 'selected' : ''}>${escapeHtml(r.name)}</option>`)
+    .join('');
+  row.innerHTML = `
+    <select class="xp-mult-role">${roleOptions}</select>
+    <input type="number" class="xp-mult-value" placeholder="Multiplier (e.g. 1.5)" min="0.1" max="10" step="0.1" value="${entry.multiplier ?? ''}" />
+    <button type="button" class="secondary-button xp-mult-remove-btn">Remove</button>
+  `;
+  row.querySelector('.xp-mult-remove-btn').addEventListener('click', () => row.remove());
+  return row;
+}
+
+async function refreshXpBoosts() {
+  const [rolesRes, boostsRes] = await Promise.all([api('/api/roles'), api('/api/xp-boosts')]);
+  if (rolesRes.ok) xpBoostRolesCache = await rolesRes.json();
+  await populateVoiceChannelSelect(document.getElementById('xp-double-voice-channel'), { withNone: true });
+  if (!boostsRes.ok) return;
+  const data = await boostsRes.json();
+  document.getElementById('xp-double-voice-channel').value = data.doubleXpVoiceChannelId || '';
+  const container = document.getElementById('xp-role-multipliers');
+  container.innerHTML = '';
+  (data.multipliers || []).forEach((m) => container.appendChild(renderXpMultiplierRow(m)));
+}
+
+document.getElementById('xp-boosts-add-role-btn').addEventListener('click', () => {
+  const container = document.getElementById('xp-role-multipliers');
+  if (container.children.length >= 10) return;
+  container.appendChild(renderXpMultiplierRow());
+});
+
+document.getElementById('xp-boosts-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('xp-boosts-feedback');
+  const doubleXpVoiceChannelId = document.getElementById('xp-double-voice-channel').value || null;
+  const multipliers = Array.from(document.querySelectorAll('#xp-role-multipliers .xp-multiplier-row')).map((row) => ({
+    roleId: row.querySelector('.xp-mult-role').value,
+    multiplier: row.querySelector('.xp-mult-value').value,
+  }));
+  const res = await api('/api/xp-boosts', { method: 'POST', body: JSON.stringify({ doubleXpVoiceChannelId, multipliers }) });
+  if (res.ok) {
+    setFeedback(feedback, 'Saved!', true);
+    refreshAuditLog();
+    refreshXpBoosts();
   } else {
     const data = await res.json().catch(() => ({}));
     setFeedback(feedback, data.error || 'Failed to save.', false);

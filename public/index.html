@@ -1172,6 +1172,17 @@
           </section>
 
           <section class="card wide">
+            <h2>XP Boosts</h2>
+            <p class="muted small">A voice channel that doubles voice XP while members are in it, and up to 10 roles with their own XP multiplier (e.g. a VIP role earning 1.5x). If a member has more than one boosted role, the highest multiplier applies — they don't stack. The active multiplier is shown on the level-up card when it's above 1x.</p>
+            <label class="field-label" for="xp-double-voice-channel">Double-XP voice channel</label>
+            <select id="xp-double-voice-channel"><option value="">— none —</option></select>
+            <div id="xp-role-multipliers" style="margin-top:12px"></div>
+            <button id="xp-boosts-add-role-btn" class="secondary-button" type="button">+ Add role multiplier</button>
+            <button id="xp-boosts-save-btn" class="primary-button">Save</button>
+            <p id="xp-boosts-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
             <h2>Leaderboard</h2>
             <div id="leaderboard-list" class="scroll-list tall"></div>
           </section>

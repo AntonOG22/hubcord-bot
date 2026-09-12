@@ -685,6 +685,14 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     res.json(channels);
   });
 
+  app.get('/api/voice-channels', requireGuildAccess, (req, res) => {
+    const channels = req.guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice)
+      .map((c) => ({ id: c.id, name: c.name, parent: c.parent?.name || null }))
+      .sort((a, b) => (a.parent || '').localeCompare(b.parent || ''));
+    res.json(channels);
+  });
+
   app.get('/api/categories', requireGuildAccess, (req, res) => {
     // Every category is listed regardless of whether it has any channels in it
     // yet — a brand-new, empty category is a completely valid destination for
@@ -1511,6 +1519,36 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     } catch (err) {
       res.status(500).json({ error: err.message || 'Could not update level roles.' });
     }
+  });
+
+  // ---------- XP boosts: double-XP voice channel + role multipliers ----------
+  app.get('/api/xp-boosts', requireGuildAccess, (req, res) => {
+    const config = guildConfig.getConfig(req.guildId);
+    res.json({
+      doubleXpVoiceChannelId: config.doubleXpVoiceChannelId || null,
+      multipliers: config.xpRoleMultipliers || [],
+    });
+  });
+
+  app.post('/api/xp-boosts', requireGuildAccess, (req, res) => {
+    const { doubleXpVoiceChannelId, multipliers } = req.body || {};
+    const patch = {};
+
+    if (doubleXpVoiceChannelId !== undefined) {
+      patch.doubleXpVoiceChannelId = doubleXpVoiceChannelId || null;
+    }
+
+    if (Array.isArray(multipliers)) {
+      const clean = multipliers
+        .map((m) => ({ roleId: String(m.roleId || '').trim(), multiplier: Number(m.multiplier) }))
+        .filter((m) => m.roleId && Number.isFinite(m.multiplier) && m.multiplier > 0 && m.multiplier <= 10)
+        .slice(0, 10); // up to 10 role multipliers, matching the dashboard UI
+      patch.xpRoleMultipliers = clean;
+    }
+
+    const config = guildConfig.updateConfig(req.guildId, patch);
+    audit(req.guildId, 'Updated XP boosts', 'double-XP channel / role multipliers');
+    res.json({ doubleXpVoiceChannelId: config.doubleXpVoiceChannelId || null, multipliers: config.xpRoleMultipliers || [] });
   });
 
   // ---------- Image uploads ----------
