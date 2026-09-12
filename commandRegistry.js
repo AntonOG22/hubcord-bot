@@ -226,6 +226,34 @@ cmd({
 });
 
 cmd({
+  name: 'customicons', aliases: ['customemojis'], category: 'Info', permission: P.Administrator,
+  usage: '', description: "Posts every custom emoji on this server, one per line with its name.",
+  run: async (message) => {
+    const emojis = [...message.guild.emojis.cache.values()];
+    if (emojis.length === 0) return 'This server has no custom emojis.';
+
+    const lines = emojis.map((e) => `${e.toString()} — \`:${e.name}:\`${e.animated ? ' (animated)' : ''}`);
+
+    // Discord's 2000-char message limit means a server with a lot of emojis
+    // needs more than one message — chunked so no line is ever cut in half.
+    const chunks = [];
+    let current = `**Custom emojis (${emojis.length}):**`;
+    for (const line of lines) {
+      if ((current + '\n' + line).length > 1900) {
+        chunks.push(current);
+        current = line;
+      } else {
+        current += `\n${line}`;
+      }
+    }
+    chunks.push(current);
+
+    for (const chunk of chunks) await message.channel.send(chunk);
+    return null;
+  },
+});
+
+cmd({
   name: 'purge', aliases: ['clear'], category: 'Moderation', permission: P.ManageMessages,
   usage: '<amount 1-100>', description: 'Deletes recent messages in this channel.',
   run: async (message, args) => {
