@@ -2,6 +2,7 @@
 // server, and a lockdown only ever touches the server it was triggered for.
 const guildConfig = require('./guildConfig');
 const features = require('./features');
+const { getEmoji } = require('./emoji');
 
 const JOIN_WINDOW_MS = 10000;
 const JOIN_THRESHOLD = 5;
@@ -34,7 +35,7 @@ function setupAntiRaid(client) {
     if (recentJoins.length >= JOIN_THRESHOLD) {
       alertModLogs(
         guildId,
-        `🚨 **Possible raid detected:** ${recentJoins.length} members joined within ${JOIN_WINDOW_MS / 1000}s. Consider using the Lockdown button on the dashboard.`
+        `${getEmoji(guildId, 'raid_alert', clientRef)} **Possible raid detected:** ${recentJoins.length} members joined within ${JOIN_WINDOW_MS / 1000}s. Consider using the Lockdown button on the dashboard.`
       );
       recentJoinsByGuild.set(guildId, []);
     }
@@ -60,7 +61,7 @@ async function setLockdown(guildId, locked) {
     }
   }
 
-  await alertModLogs(guildId, locked ? `🔒 **Server-wide lockdown enabled** (${count} channels).` : `🔓 **Lockdown lifted** (${count} channels).`);
+  await alertModLogs(guildId, locked ? `${getEmoji(guildId, 'status_locked', clientRef)} **Server-wide lockdown enabled** (${count} channels).` : `🔓 **Lockdown lifted** (${count} channels).`);
   return count;
 }
 

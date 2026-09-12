@@ -11,6 +11,7 @@ const guildConfig = require('./guildConfig');
 const features = require('./features');
 const warnings = require('./warnings');
 const { sendModerationDm } = require('./moderationDm');
+const { getEmoji } = require('./emoji');
 
 const DEFAULTS = () => ({
   // existing filters
@@ -85,7 +86,7 @@ async function flag(guildId, channel, member, reason) {
   if (!modLogsChannelId) return;
   try {
     const modLog = await clientRef.channels.fetch(modLogsChannelId);
-    await modLog.send(`🛡️ Auto-mod: ${reason} — ${member} in ${channel}`);
+    await modLog.send(`${getEmoji(guildId, 'mod_shield', clientRef)} Auto-mod: ${reason} — ${member} in ${channel}`);
   } catch (err) {
     console.error('Auto-mod could not post to mod-logs:', err.message);
   }

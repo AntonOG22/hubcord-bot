@@ -2,6 +2,7 @@
 // weekly. Persisted so pending reminders survive a bot restart.
 const fs = require('fs');
 const path = require('path');
+const { getEmoji } = require('./emoji');
 
 const STATE_FILE = path.join(__dirname, 'reminders-state.json');
 const MAX_DELAY = 2147483647; // setTimeout's max delay (~24.8 days)
@@ -29,7 +30,7 @@ async function fireReminder(id) {
 
   try {
     const channel = await clientRef.channels.fetch(reminder.channelId);
-    await channel.send({ content: `⏰ **Reminder:** ${reminder.message}` });
+    await channel.send({ content: `${getEmoji(channel.guildId, 'reminder', clientRef)} **Reminder:** ${reminder.message}` });
   } catch (err) {
     console.error('Failed to send reminder:', err.message);
   }

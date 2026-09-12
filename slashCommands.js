@@ -13,6 +13,7 @@
 // documented way to use the bot; slash commands are the same functionality,
 // just launchable the other way too.
 const { SlashCommandBuilder } = require('discord.js');
+const { getEmoji } = require('./emoji');
 const { commands } = require('./commandRegistry');
 const commandConfig = require('./commandConfig');
 
@@ -126,7 +127,7 @@ function setupSlashCommands(client, ctx) {
     const commandName = interaction.options.getSubcommand(false);
     const command = commandName ? commands.find((c) => c.name === commandName) : null;
     if (!command) {
-      await interaction.reply({ content: "❌ That command isn't available.", ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `${getEmoji(interaction.guild.id, 'status_error', interaction.client)} That command isn't available.`, ephemeral: true }).catch(() => {});
       return;
     }
 
@@ -151,11 +152,11 @@ function setupSlashCommands(client, ctx) {
         // The command already sent its own visible message (channel.send) —
         // Discord still requires every interaction to get *some* response,
         // so this is a tiny confirmation only the invoker sees.
-        await interaction.reply({ content: '✅ Done.', ephemeral: true });
+        await interaction.reply({ content: `${getEmoji(interaction.guild.id, 'status_success', interaction.client)} Done.`, ephemeral: true });
       }
     } catch (err) {
       console.error(`Slash command "${command.name}" failed:`, err);
-      const payload = { content: `❌ ${err.message || 'Something went wrong running that command.'}`, ephemeral: true };
+      const payload = { content: `${getEmoji(interaction.guild.id, 'status_error', interaction.client)} ${err.message || 'Something went wrong running that command.'}`, ephemeral: true };
       if (interaction.replied || interaction.deferred) await interaction.followUp(payload).catch(() => {});
       else await interaction.reply(payload).catch(() => {});
     }

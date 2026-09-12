@@ -19,6 +19,7 @@ const verificationGate = require('./verificationGate');
 const { setupCommandHandler } = require('./commandHandler');
 const { setupSlashCommands } = require('./slashCommands');
 const guildConfig = require('./guildConfig');
+const { uploadMissingApplicationEmojis } = require('./emoji');
 const { setupTickets } = require('./tickets');
 const { setupRolePanels } = require('./rolePanels');
 const { setupJoinLeaveMessages } = require('./joinLeaveMessages');
@@ -82,6 +83,20 @@ client.once('ready', async () => {
 
   // No "home guild" here — this bot is multi-tenant, every server it's in configures
   // itself entirely through the dashboard, with no .env fallback for any of them.
+
+  // Populates client.application.emojis.cache, which emoji.js reads from for
+  // the "custom" emoji style — application emojis aren't guild-scoped, so
+  // this one fetch covers every server the bot is in. Best-effort: if it
+  // fails (or nothing's been uploaded yet), emoji.js just keeps falling
+  // back to the standard Unicode emoji, nothing else depends on this.
+  try {
+    await client.application.fetch();
+    await client.application.emojis.fetch();
+    console.log(`Loaded ${client.application.emojis.cache.size} custom application emoji(s).`);
+    await uploadMissingApplicationEmojis(client);
+  } catch (err) {
+    console.error('Could not load/upload application emojis (custom emoji style will fall back to standard):', err.message);
+  }
 
   setupCounting(client);
   setupActivityTracking(client);

@@ -31,6 +31,7 @@ const { EmbedBuilder, ChannelType } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { brandFooter } = require('./brand');
 const features = require('./features');
+const { getEmoji } = require('./emoji');
 
 // Downloaded by scripts/download-yt-dlp.js on `npm install` (see that file
 // for why it's a plain Node script instead of the yt-dlp-exec package).
@@ -248,7 +249,7 @@ function canUseMusicCommand(guildId, key, member) {
 function assertNotBlockedByAutomatic(guildId, member) {
   const automatic = getState(guildId).automatic;
   if (automatic?.active && !member.permissions.has('Administrator')) {
-    throw new Error(`🔒 Automatic mode ("${automatic.mood}") is active — only Administrators can use music commands right now. An admin can stop it with !automaticstop.`);
+    throw new Error(`${getEmoji(guildId, 'status_locked', clientRef)} Automatic mode ("${automatic.mood}") is active — only Administrators can use music commands right now. An admin can stop it with !automaticstop.`);
   }
 }
 
@@ -392,7 +393,7 @@ function friendlyErrorReason(message) {
 function buildPlaybackFailureEmbed(guildId, title, reason) {
   return new EmbedBuilder()
     .setColor(0xe74c3c)
-    .setTitle("⚠️ Couldn't play this track")
+    .setTitle(`${getEmoji(guildId, 'status_warning', clientRef)} Couldn't play this track`)
     .setDescription(`**${title}**\n${reason}\n\nSkipping to the next one.`)
     .setFooter(brandFooter(clientRef, guildId));
 }
@@ -739,7 +740,7 @@ function renderLyricsEmbed(guildId, data) {
   const { entry, displayTitle } = data;
   const embed = new EmbedBuilder()
     .setColor(0x3ecf8e)
-    .setTitle(`🎤 ${displayTitle}`)
+    .setTitle(`${getEmoji(guildId, 'music_mic', clientRef)} ${displayTitle}`)
     .setFooter(brandFooter(clientRef, guildId));
   if (entry.thumbnail) embed.setThumbnail(entry.thumbnail);
   if (entry.webpageUrl) embed.setURL(entry.webpageUrl);
@@ -769,8 +770,8 @@ async function buildLyricsEmbed(guildId) {
 function buildLyricsEndedEmbed(guildId, title) {
   return new EmbedBuilder()
     .setColor(0x3ecf8e)
-    .setTitle(`🎤 ${title}`)
-    .setDescription('🎵 This song has ended.')
+    .setTitle(`${getEmoji(guildId, 'music_mic', clientRef)} ${title}`)
+    .setDescription(`${getEmoji(guildId, 'music_note', clientRef)} This song has ended.`)
     .setFooter(brandFooter(clientRef, guildId));
 }
 
@@ -1029,7 +1030,7 @@ function playResolvedTrack(guildId, next, track, excludeClients, attemptNumber) 
           if (!channel) return;
           const embed = new EmbedBuilder()
             .setColor(0x3ecf8e)
-            .setTitle('▶️ Now playing')
+            .setTitle(`${getEmoji(guildId, 'music_play', clientRef)} Now playing`)
             .setDescription(
               `**${track.title}**${next.requestedBy ? `\nRequested by <@${next.requestedBy}>` : ''}` +
               // YouTube flatly refused every client/cookie combo for this
@@ -1190,7 +1191,7 @@ async function playNext(guildId) {
       // and doing nothing forever.
       state.automatic = null;
       clientRef.channels.fetch(state.textChannelId)
-        .then((ch) => ch?.send("🔀 Automatic mode stopped — couldn't find any more results."))
+        .then((ch) => ch?.send(`${getEmoji(guildId, 'music_shuffle', clientRef)} Automatic mode stopped — couldn't find any more results.`))
         .catch(() => {});
     }
   }
@@ -1216,7 +1217,7 @@ async function playNext(guildId) {
     if (!next.isAutomatic && maxDuration > 0 && track.duration && track.duration > maxDuration) {
       if (state.textChannelId && clientRef) {
         clientRef.channels.fetch(state.textChannelId)
-          .then((ch) => ch?.send(`⏭️ Skipping **${track.title}** — longer than the ${Math.round(maxDuration / 60)}-minute limit set for this server.`))
+          .then((ch) => ch?.send(`${getEmoji(guildId, 'music_skip', clientRef)} Skipping **${track.title}** — longer than the ${Math.round(maxDuration / 60)}-minute limit set for this server.`))
           .catch(() => {});
       }
       return playNext(guildId);

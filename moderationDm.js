@@ -14,11 +14,15 @@
 // to act, and ignores failure.
 const { EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
+const { getEmoji } = require('./emoji');
 
+// emojiKey is null for actions with no dedicated icon asset yet (timeout) —
+// getEmoji() would just be passed through unused in that case anyway, but
+// staying explicit here avoids a misleading lookup.
 const ACTION_INFO = {
-  warn: { verb: 'warned', emoji: '⚠️', color: 0xf0b132 },
-  timeout: { verb: 'timed out', emoji: '⏱️', color: 0xe67e22 },
-  ban: { verb: 'banned', emoji: '🔨', color: 0xed4245 },
+  warn: { verb: 'warned', emoji: '⚠️', emojiKey: 'status_warning', color: 0xf0b132 },
+  timeout: { verb: 'timed out', emoji: '⏱️', emojiKey: null, color: 0xe67e22 },
+  ban: { verb: 'banned', emoji: '🔨', emojiKey: 'mod_ban', color: 0xed4245 },
 };
 
 async function sendModerationDm(client, target, guild, { action, reason, moderatorTag, durationText }) {
@@ -26,9 +30,10 @@ async function sendModerationDm(client, target, guild, { action, reason, moderat
   if (!info || !target) return;
 
   try {
+    const emoji = info.emojiKey ? getEmoji(guild.id, info.emojiKey, client) : info.emoji;
     const embed = new EmbedBuilder()
       .setColor(info.color)
-      .setTitle(`${info.emoji} You were ${info.verb} in ${guild.name}`)
+      .setTitle(`${emoji} You were ${info.verb} in ${guild.name}`)
       .setDescription(reason ? `**Reason:** ${reason}` : 'No reason was given.')
       .setFooter(brandFooter(client, guild.id))
       .setTimestamp();

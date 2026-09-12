@@ -49,6 +49,7 @@ const aiAutomod = require('./aiAutomod');
 const { sendModerationDm } = require('./moderationDm');
 const { fillPlaceholders } = require('./placeholders');
 const { applyColorCodes, stripColorCodes, applyLinkMasking } = require('./textFormatting');
+const { getEmoji } = require('./emoji');
 const helmet = require('helmet');
 
 const PERMISSION_NAMES = Object.fromEntries(
@@ -65,7 +66,8 @@ const ANNOUNCEMENT_TEMPLATES = {
     color: 0xed4245,
   },
   event: {
-    title: '🎉 Event Starting Soon',
+    titleText: 'Event Starting Soon',
+    titleEmojiKey: 'giveaway', // std 🎉, see emoji.js
     description: 'Something fun is about to happen — jump in now!',
     color: 0x57f287,
   },
@@ -791,7 +793,8 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
     try {
       const channel = await client.channels.fetch(announcementsChannelId);
-      const embed = new EmbedBuilder().setTitle(template.title).setDescription(template.description).setColor(template.color).setFooter(brandFooter(client, req.guildId)).setTimestamp();
+      const title = template.titleEmojiKey ? `${getEmoji(req.guildId, template.titleEmojiKey, client)} ${template.titleText}` : template.title;
+    const embed = new EmbedBuilder().setTitle(title).setDescription(template.description).setColor(template.color).setFooter(brandFooter(client, req.guildId)).setTimestamp();
       await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
       audit(req.guildId, 'Sent announcement template', type);
       res.json({ ok: true });

@@ -21,6 +21,7 @@ const store = makeGuildStore('guild-config.json', () => ({
   watermarkDisabled: false, // per-server opt-out of the "Emerald" footer, set from the admin panel. Official announcements/broadcasts are never affected — they use their own fixed "verified official" footer specifically to prove they came from the real bot.
   language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
   disabledFeatures: [], // feature keys turned off for this server — see features.js
+  emojiStyle: 'standard', // 'standard' | 'custom' — see emoji.js. Custom uses this bot's own uploaded application emojis where available, falling back to the standard Unicode one for anything not (yet) uploaded.
 }));
 
 let homeGuildId = null;
@@ -48,6 +49,9 @@ function getConfig(guildId) {
 function updateConfig(guildId, patch) {
   const state = store.get(guildId);
   safeAssign(state, patch);
+  if (patch && patch.emojiStyle !== undefined && patch.emojiStyle !== 'custom') {
+    state.emojiStyle = 'standard'; // anything other than the one real alternative just means "standard"
+  }
   store.save();
   return getConfig(guildId);
 }
