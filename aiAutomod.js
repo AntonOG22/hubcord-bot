@@ -32,7 +32,11 @@ const botActionRegistry = require('./botActionRegistry');
 const { brandFooter } = require('./brand');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'llama-3.1-8b-instant'; // fast + cheap by design — this runs on live chat, not a one-off reply
+// llama-3.1-8b-instant and llama-3.3-70b-versatile both 404'd as
+// "model_not_found" on the account's actual key — trying one of Groq's
+// oldest/most-established model IDs instead, in case those two newer ones
+// are behind some account-side gate this one isn't.
+const MODEL = 'llama3-8b-8192';
 const MEMORY_MAX_NOTES_PER_USER = 5;
 
 const RATE_LIMIT_MAX = 20; // messages sent to the model per guild per minute, max

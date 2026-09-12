@@ -15,13 +15,12 @@
 const http = require('http');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// llama-3.3-70b-versatile 404'd on the account's actual Groq key ("does not
-// exist or you do not have access to it") — larger models are sometimes
-// gated behind account verification/billing on Groq. Falling back to the
-// same small model aiAutomod.js already uses successfully, which is
-// available on every tier. Swap back to a 70B-class model later if the
-// account gets access to one — tool-calling quality would improve.
-const MODEL = 'llama-3.1-8b-instant';
+// llama-3.3-70b-versatile AND llama-3.1-8b-instant both 404'd as
+// "model_not_found" on the account's actual Groq key — trying one of Groq's
+// oldest/most-established model IDs instead, in case those two newer ones
+// are behind some account-side gate this one isn't. Swap to something
+// stronger later once we know which models this account actually has.
+const MODEL = 'llama3-8b-8192';
 const MAX_TOOL_ITERATIONS = 6;
 
 const SYSTEM_PROMPT = `You are the built-in assistant inside the Emerald Discord bot's admin dashboard, currently helping manage the server "{{guildName}}".
