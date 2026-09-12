@@ -15,6 +15,7 @@ warnings-state.json
 sticky-state.json
 autoresponses-state.json
 giveaways-state.json
+timed-polls-state.json
 reminders-state.json
 automod-state.json
 reactionroles-state.json

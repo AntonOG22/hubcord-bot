@@ -114,6 +114,39 @@ function setupModLogTracking(client) {
     post(client, channel.guild.id, `🧹 **${messages.size}** messages purged in #${channel.name} by **${by}**`);
   });
 
+  // Single-message delete/edit — clip() keeps a very long message from
+  // blowing up the mod-log line, and both bail out on a partial message
+  // (uncached, e.g. from before the bot last restarted) since discord.js
+  // can't give us its actual content to show either way.
+  const clip = (s) => {
+    const text = (s || '').trim();
+    if (!text) return '*(no text content)*';
+    return text.length > 400 ? `${text.slice(0, 400)}…` : text;
+  };
+
+  client.on('messageDelete', async (message) => {
+    if (!message.guild || message.partial || message.author?.bot) return;
+    if (!message.content && message.attachments.size === 0) return; // nothing meaningful to show (e.g. embed-only)
+    const attachmentNote = message.attachments.size ? `\n📎 ${message.attachments.size} attachment(s)` : '';
+    post(
+      client,
+      message.guild.id,
+      `🗑️ Message by **${message.author.tag}** deleted in #${message.channel.name}:\n> ${clip(message.content).replaceAll('\n', '\n> ')}${attachmentNote}`
+    );
+  });
+
+  client.on('messageUpdate', async (oldMessage, newMessage) => {
+    if (!newMessage.guild || oldMessage.partial || newMessage.partial || newMessage.author?.bot) return;
+    const oldContent = (oldMessage.content || '').trim();
+    const newContent = (newMessage.content || '').trim();
+    if (oldContent === newContent) return; // e.g. a link preview attaching its own embed also fires this with no real text change
+    post(
+      client,
+      newMessage.guild.id,
+      `✏️ Message by **${newMessage.author.tag}** edited in #${newMessage.channel.name}:\n**Before:** ${clip(oldContent)}\n**After:** ${clip(newContent)}`
+    );
+  });
+
   client.on('channelUpdate', async (oldChannel, newChannel) => {
     if (
       typeof oldChannel.rateLimitPerUser === 'number' &&

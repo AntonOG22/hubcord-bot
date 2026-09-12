@@ -9,6 +9,7 @@ const { setupXp } = require('./xpSystem');
 const { setupSticky } = require('./stickyMessages');
 const { setupAutoResponses } = require('./autoResponses');
 const { setupGiveaways } = require('./giveaways');
+const { setupPolls } = require('./polls');
 const { setupReminders } = require('./reminders');
 const { setupAutomod } = require('./automod');
 const { setupAntiRaid } = require('./antiRaid');
@@ -88,6 +89,7 @@ client.once('ready', async () => {
   setupSticky(client);
   setupAutoResponses(client);
   setupGiveaways(client);
+  setupPolls(client);
   setupReminders(client);
   setupAutomod(client);
   setupAntiRaid(client);

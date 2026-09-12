@@ -13,6 +13,7 @@ const { isProtectedTarget } = require('./ownerProtection');
 const warnings = require('./warnings');
 const xpSystem = require('./xpSystem');
 const levelRoles = require('./levelRoles');
+const polls = require('./polls');
 const stickyMessages = require('./stickyMessages');
 const autoResponses = require('./autoResponses');
 const giveaways = require('./giveaways');
@@ -833,6 +834,21 @@ cmd({
     const embed = new EmbedBuilder().setTitle(`📊 ${question}`).setDescription(options.map((o, i) => `${numberEmoji[i]} ${o}`).join('\n\n')).setColor(0x5865f2).setFooter(brandFooter(message.client, message.guild.id));
     const msg = await message.channel.send({ embeds: [embed] });
     for (let i = 0; i < options.length; i++) await msg.react(numberEmoji[i]);
+    return null;
+  },
+});
+
+cmd({
+  name: 'polltimer', aliases: ['timedpoll'], category: 'Messaging', permission: P.ManageGuild,
+  usage: '<minutes> <question> | <option1> | <option2> ...',
+  description: 'Posts a reaction poll that closes itself after N minutes and edits in the final results.',
+  run: async (message, args) => {
+    const minutes = parseInt(args[0], 10);
+    if (!minutes || minutes < 1) throw new Error('Provide a duration in minutes (e.g. 30).');
+    const parts = args.slice(1).join(' ').split('|').map((s) => s.trim()).filter(Boolean);
+    if (parts.length < 3) throw new Error('Format: polltimer <minutes> <question> | <option1> | <option2> ...');
+    const [question, ...options] = parts;
+    await polls.createTimedPoll(message.channelId, message.guild.id, question, options, minutes);
     return null;
   },
 });

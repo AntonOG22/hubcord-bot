@@ -6,6 +6,14 @@
 // automatically, so that's literally the "side stripe" this produces, no
 // extra rendering work needed.
 //
+// Both platforms keep their notification message alive instead of posting
+// once and forgetting about it: a live Twitch stream gets its message edited
+// with fresh viewer count/duration on every poll and again once it ends
+// (rather than just silently going stale), and a YouTube entry whose feed
+// info changes for the same still-latest video (e.g. a scheduled premiere's
+// placeholder title/thumbnail turning into the real ones once it airs) gets
+// its message edited too instead of leaving it out of date.
+//
 // Twitch needs TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET env vars (a free
 // Twitch Developer app, Client Credentials grant — no per-user OAuth).
 // YouTube needs no key at all: it reads the channel's public RSS feed.
@@ -19,6 +27,7 @@ const features = require('./features');
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes — light on both APIs, fast enough to feel live
 const TWITCH_COLOR = 0x9146ff;
+const TWITCH_ENDED_COLOR = 0x6441a5;
 const YOUTUBE_COLOR = 0xff0000;
 const MAX_TRACKED_PER_GUILD = 15; // enforced in dashboard.js's POST /api/stream-alerts
 const TWITCH_LOGINS_PER_REQUEST = 100; // Helix's own hard cap on user_login params in one call
@@ -113,7 +122,54 @@ async function fetchLatestYoutubeVideo(channelId) {
   };
 }
 
-// ---------- Notification sending ----------
+// ---------- Embeds ----------
+
+function buildTwitchEmbed(guildId, entry, info, ended) {
+  const embed = new EmbedBuilder()
+    .setURL(`https://twitch.tv/${entry.identifier}`)
+    .setFooter(brandFooter(clientRef, guildId, ended ? 'Twitch stream ended' : 'Live on Twitch'))
+    .setTimestamp();
+
+  const fields = [];
+  if (info.game) fields.push({ name: 'Game', value: info.game, inline: true });
+
+  if (ended) {
+    embed.setColor(TWITCH_ENDED_COLOR).setTitle(`⏹️ ${info.userName || entry.identifier} was live on Twitch`);
+    if (info.peakViewers != null) fields.push({ name: 'Peak viewers', value: String(info.peakViewers), inline: true });
+    if (info.startedAt) {
+      const startedSec = Math.floor(new Date(info.startedAt).getTime() / 1000);
+      fields.push({ name: 'Was live', value: `<t:${startedSec}:R> until just now`, inline: true });
+    }
+  } else {
+    embed.setColor(TWITCH_COLOR).setTitle(`🔴 ${info.userName} is live on Twitch!`);
+    if (info.viewers != null) fields.push({ name: 'Viewers', value: String(info.viewers), inline: true });
+    if (info.startedAt) fields.push({ name: 'Live since', value: `<t:${Math.floor(new Date(info.startedAt).getTime() / 1000)}:R>`, inline: true });
+  }
+
+  embed.setDescription(info.title || null).addFields(fields);
+  // A query string cache-busts the thumbnail on edit — Twitch serves the same
+  // URL pattern the whole time it's live, so without this Discord would just
+  // keep showing whatever frame it first cached instead of a fresh one.
+  if (info.thumbnail) embed.setImage(`${info.thumbnail}?refresh=${Date.now()}`);
+  return embed;
+}
+
+function buildYoutubeEmbed(guildId, video) {
+  const embed = new EmbedBuilder()
+    .setColor(YOUTUBE_COLOR)
+    .setTitle(`📺 New video from ${video.channelName}`)
+    .setURL(video.url)
+    .setDescription(video.title)
+    .setFooter(brandFooter(clientRef, guildId, 'New on YouTube'))
+    .setTimestamp();
+  if (video.publishedAt) {
+    embed.addFields({ name: 'Published', value: `<t:${Math.floor(video.publishedAt.getTime() / 1000)}:R>`, inline: true });
+  }
+  if (video.thumbnail) embed.setImage(video.thumbnail);
+  return embed;
+}
+
+// ---------- Notification sending/editing ----------
 
 // entry.pingRoleId is either a real role snowflake, the fixed sentinel
 // "everyone" (not a role ID — @everyone/@here need their own mention syntax
@@ -124,14 +180,34 @@ function buildPing(entry) {
   return { content: `<@&${entry.pingRoleId}>`, allowedMentions: { roles: [entry.pingRoleId] } };
 }
 
-async function notify(entry, embed) {
+async function sendNotification(entry, embed) {
   try {
     const channel = await clientRef.channels.fetch(entry.notifyChannelId);
-    if (!channel || !channel.isTextBased()) return;
+    if (!channel || !channel.isTextBased()) return null;
     const { content, allowedMentions } = buildPing(entry);
-    await channel.send({ content, embeds: [embed], allowedMentions });
+    return await channel.send({ content, embeds: [embed], allowedMentions });
   } catch (err) {
     console.error(`Stream alert notify failed for ${entry.platform}/${entry.identifier}:`, err.message);
+    return null;
+  }
+}
+
+// Edits the entry's previously-sent notification in place. Returns false
+// (never throws) when there's nothing to edit or the message/channel is
+// gone, so callers can fall back to posting a fresh one instead.
+async function editNotification(entry, embed) {
+  const { messageId, channelId } = entry.state;
+  if (!messageId || !channelId) return false;
+  try {
+    const channel = await clientRef.channels.fetch(channelId);
+    if (!channel?.isTextBased()) return false;
+    const message = await channel.messages.fetch(messageId).catch(() => null);
+    if (!message) return false;
+    await message.edit({ embeds: [embed] });
+    return true;
+  } catch (err) {
+    console.error(`Stream alert edit failed for ${entry.platform}/${entry.identifier}:`, err.message);
+    return false;
   }
 }
 
@@ -154,26 +230,50 @@ async function pollTwitch(entriesByGuild) {
     const stream = liveMap.get(entry.identifier.toLowerCase());
     entry.state = entry.state || {};
 
-    // Notifies immediately if the channel is already live the moment it's
-    // added — matches how most stream-alert bots behave. Only fires once
-    // per go-live: state.live stays true until the channel goes offline.
     if (stream) {
+      const thumb = (stream.thumbnail_url || '').replace('{width}', '640').replace('{height}', '360');
+      const info = {
+        userName: stream.user_name,
+        title: stream.title,
+        game: stream.game_name || null,
+        viewers: stream.viewer_count,
+        startedAt: stream.started_at,
+        thumbnail: thumb || null,
+      };
+      // Twitch stops returning any info at all the instant a stream goes
+      // offline, so the peak viewer count and last-known details are cached
+      // here — it's the only way the "stream ended" edit below can still
+      // show something meaningful instead of just "it's over now".
+      entry.state.lastInfo = { ...info, peakViewers: Math.max(info.viewers || 0, entry.state.lastInfo?.peakViewers || 0) };
+
+      const embed = buildTwitchEmbed(guildId, entry, info, false);
       if (!entry.state.live) {
+        // Notifies immediately if the channel is already live the moment
+        // it's added — matches how most stream-alert bots behave.
         entry.state.live = true;
         entry.state.lastStreamId = stream.id;
-        const embed = new EmbedBuilder()
-          .setColor(TWITCH_COLOR)
-          .setTitle(`🔴 ${stream.user_name} is now live on Twitch!`)
-          .setURL(`https://twitch.tv/${entry.identifier}`)
-          .setDescription(stream.title + (stream.game_name ? `\n\nPlaying **${stream.game_name}**` : ''))
-          .setFooter(brandFooter(clientRef, guildId, 'Live on Twitch'))
-          .setTimestamp();
-        const thumb = (stream.thumbnail_url || '').replace('{width}', '640').replace('{height}', '360');
-        if (thumb) embed.setImage(thumb);
-        await notify(entry, embed);
+        const message = await sendNotification(entry, embed);
+        if (message) {
+          entry.state.messageId = message.id;
+          entry.state.channelId = message.channelId;
+        }
+      } else {
+        // Still live — refresh the existing message with the current viewer
+        // count/duration instead of leaving it stuck at "just went live".
+        const edited = await editNotification(entry, embed);
+        if (!edited) {
+          const message = await sendNotification(entry, embed);
+          if (message) {
+            entry.state.messageId = message.id;
+            entry.state.channelId = message.channelId;
+          }
+        }
       }
-    } else {
+    } else if (entry.state.live) {
       entry.state.live = false;
+      const embed = buildTwitchEmbed(guildId, entry, entry.state.lastInfo || {}, true);
+      const edited = await editNotification(entry, embed);
+      if (!edited) await sendNotification(entry, embed);
     }
   }
 }
@@ -197,36 +297,54 @@ async function pollYoutube(entriesByGuild) {
     const video = videoByChannel.get(entry.identifier);
     if (!video) continue;
     entry.state = entry.state || {};
-    if (entry.state.lastVideoId === video.videoId) continue; // already notified about this one
+
+    const isFirstCheck = !entry.state.lastVideoId;
+    const isSameVideo = entry.state.lastVideoId === video.videoId;
 
     // The very first check just records the channel's current latest video
     // without notifying — otherwise adding a channel would immediately
     // re-announce whatever it already posted before you tracked it.
-    const isFirstCheck = !entry.state.lastVideoId;
-    entry.state.lastVideoId = video.videoId;
-    if (isFirstCheck) continue;
+    if (isFirstCheck) {
+      entry.state.lastVideoId = video.videoId;
+      entry.state.lastVideoInfo = video;
+      continue;
+    }
 
-    // Second safety net on top of the first-check skip above: never announce
-    // a video whose own publish timestamp is more than a day old, no matter
-    // why it looked "new" to us (a missed poll, a channel re-track, a video
-    // that only just went public after being scheduled/premiered weeks ago,
-    // etc). The state is still updated above so this video won't be re-
-    // evaluated on the next poll either way.
+    if (isSameVideo) {
+      // Same latest video as last poll — if the feed now shows different
+      // info for it (a scheduled premiere's placeholder title/thumbnail
+      // turning into the real ones once it airs, a creator editing the
+      // title after publishing) keep the notification message in sync
+      // instead of leaving it stale.
+      const prev = entry.state.lastVideoInfo || {};
+      const changed = prev.title !== video.title || prev.thumbnail !== video.thumbnail;
+      entry.state.lastVideoInfo = video;
+      if (changed && entry.state.messageId) {
+        await editNotification(entry, buildYoutubeEmbed(guildId, video));
+      }
+      continue;
+    }
+
+    // A genuinely new video.
+    entry.state.lastVideoId = video.videoId;
+    entry.state.lastVideoInfo = video;
+
+    // Never announce a video whose own publish timestamp is more than a day
+    // old, no matter why it looked "new" to us (a missed poll, a channel
+    // re-track, a video that only just went public after being scheduled/
+    // premiered weeks ago, etc). The state is still updated above so this
+    // video won't be re-evaluated on the next poll either way.
     const MAX_ANNOUNCE_AGE_MS = 24 * 60 * 60 * 1000;
     if (video.publishedAt && Date.now() - video.publishedAt.getTime() > MAX_ANNOUNCE_AGE_MS) {
       console.log(`Skipping stale YouTube alert for ${entry.identifier}: "${video.title}" was published ${video.publishedAt.toISOString()}`);
       continue;
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(YOUTUBE_COLOR)
-      .setTitle(`📺 New video from ${video.channelName}`)
-      .setURL(video.url)
-      .setDescription(video.title)
-      .setFooter(brandFooter(clientRef, guildId, 'New on YouTube'))
-      .setTimestamp();
-    if (video.thumbnail) embed.setImage(video.thumbnail);
-    await notify(entry, embed);
+    const message = await sendNotification(entry, buildYoutubeEmbed(guildId, video));
+    if (message) {
+      entry.state.messageId = message.id;
+      entry.state.channelId = message.channelId;
+    }
   }
 }
 
