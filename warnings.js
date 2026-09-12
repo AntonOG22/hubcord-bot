@@ -2,6 +2,7 @@
 // manages gets two independent warning counts, not a shared one.
 const { makeGuildStore } = require('./guildStore');
 const { sendModerationDm } = require('./moderationDm');
+const modLogTracker = require('./modLogTracker');
 
 const store = makeGuildStore('warnings-state.json', () => ({})); // guildId -> { userId: [{reason,by,time}] }
 const AUTO_TIMEOUT_THRESHOLD = 3;
@@ -25,6 +26,11 @@ async function addWarning(client, guild, userId, reason, byTag) {
   }
 
   if (member) await sendModerationDm(client, member, guild, { action: 'warn', reason, moderatorTag: byTag });
+
+  const targetTag = member?.user?.tag || userId;
+  modLogTracker.post(client, guild.id, `⚠️ **${targetTag}** was warned by **${byTag}** (${list.length} total): ${reason}`, {
+    type: 'warn', targetTag, moderatorTag: byTag, reason,
+  });
 
   if (list.length >= AUTO_TIMEOUT_THRESHOLD && list.length % AUTO_TIMEOUT_THRESHOLD === 0) {
     try {

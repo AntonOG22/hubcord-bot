@@ -17,6 +17,7 @@ const { setupReactionRoles } = require('./reactionRoles');
 const { setupStats } = require('./stats');
 const verificationGate = require('./verificationGate');
 const { setupCommandHandler } = require('./commandHandler');
+const { setupSlashCommands } = require('./slashCommands');
 const guildConfig = require('./guildConfig');
 const { setupTickets } = require('./tickets');
 const { setupRolePanels } = require('./rolePanels');
@@ -107,6 +108,7 @@ client.once('ready', async () => {
   setupImposter(client);
 
   setupCommandHandler(client, { client });
+  setupSlashCommands(client, { client });
 });
 
 client.on('guildMemberAdd', async (member) => {

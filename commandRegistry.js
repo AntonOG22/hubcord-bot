@@ -11,6 +11,7 @@ const { sendModerationDm } = require('./moderationDm');
 const { isProtectedTarget } = require('./ownerProtection');
 
 const warnings = require('./warnings');
+const modCases = require('./modCases');
 const xpSystem = require('./xpSystem');
 const levelRoles = require('./levelRoles');
 const polls = require('./polls');
@@ -204,6 +205,23 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     if (!isProtectedTarget(message.author.id, member.id)) warnings.clearWarnings(message.guild.id, member.id);
     return `🧹 Cleared warnings for **${member.user.tag}**`;
+  },
+});
+
+cmd({
+  name: 'case', aliases: [], category: 'Info', permission: P.ModerateMembers,
+  usage: '<id>', description: 'Looks up a moderation case by its number (from the mod-log channel).',
+  run: async (message, args) => {
+    const record = modCases.getCase(message.guild.id, args[0]);
+    if (!record) throw new Error("Couldn't find a case with that number.");
+    const when = `<t:${Math.floor(record.timestamp / 1000)}:f>`;
+    return (
+      `📁 **Case #${record.id}** — ${record.type}\n` +
+      `Target: **${record.targetTag || 'unknown'}**\n` +
+      `Moderator: **${record.moderatorTag || 'unknown'}**\n` +
+      (record.reason ? `Reason: ${record.reason}\n` : '') +
+      `When: ${when}`
+    );
   },
 });
 

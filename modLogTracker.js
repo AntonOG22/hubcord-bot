@@ -6,6 +6,7 @@ const { AuditLogEvent } = require('discord.js');
 const guildConfig = require('./guildConfig');
 const features = require('./features');
 const botActionRegistry = require('./botActionRegistry');
+const modCases = require('./modCases');
 
 // Finds the most recent matching audit log entry for a target, so we know who did it.
 async function findAuditEntry(guild, type, targetId) {
@@ -22,13 +23,24 @@ async function findAuditEntry(guild, type, targetId) {
   }
 }
 
-async function post(client, guildId, text) {
+// `caseInfo` (type/targetTag/moderatorTag/reason) is only passed for actions
+// worth a lookupable case number (bans, kicks, timeouts, warns) — routine
+// stuff like role tweaks or slowmode changes stays plain. The case is
+// recorded even if there's no mod-log channel configured, so !case still
+// works; only the channel post itself depends on that.
+async function post(client, guildId, text, caseInfo = null) {
+  let prefix = '';
+  if (caseInfo) {
+    const id = modCases.recordCase(guildId, caseInfo);
+    prefix = `\`Case #${id}\` `;
+  }
+
   if (!features.isEnabled(guildId, 'modLog')) return;
   const modLogsChannelId = guildConfig.getConfig(guildId).modLogsChannelId;
   if (!modLogsChannelId) return;
   try {
     const channel = await client.channels.fetch(modLogsChannelId);
-    await channel.send({ content: text });
+    await channel.send({ content: `${prefix}${text}` });
   } catch (err) {
     console.error('Could not post to mod-logs:', err.message);
   }
@@ -45,13 +57,17 @@ function setupModLogTracking(client) {
     const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
     const reason = entry?.reason || 'no reason given';
-    post(client, ban.guild.id, `🔨 **${ban.user.tag}** was banned by **${by}** (${reason})`);
+    post(client, ban.guild.id, `🔨 **${ban.user.tag}** was banned by **${by}** (${reason})`, {
+      type: 'ban', targetTag: ban.user.tag, moderatorTag: by, reason,
+    });
   });
 
   client.on('guildBanRemove', async (ban) => {
     const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
-    post(client, ban.guild.id, `✅ **${ban.user.tag}** was unbanned by **${by}**`);
+    post(client, ban.guild.id, `✅ **${ban.user.tag}** was unbanned by **${by}**`, {
+      type: 'unban', targetTag: ban.user.tag, moderatorTag: by,
+    });
   });
 
   client.on('guildMemberRemove', async (member) => {
@@ -61,7 +77,9 @@ function setupModLogTracking(client) {
     if (!entry) return;
     const by = entry.executor ? entry.executor.tag : 'unknown';
     const reason = entry.reason || 'no reason given';
-    post(client, member.guild.id, `👢 **${member.user.tag}** was kicked by **${by}** (${reason})`);
+    post(client, member.guild.id, `👢 **${member.user.tag}** was kicked by **${by}** (${reason})`, {
+      type: 'kick', targetTag: member.user.tag, moderatorTag: by, reason,
+    });
   });
 
   client.on('guildMemberUpdate', async (oldMember, newMember) => {
@@ -80,9 +98,13 @@ function setupModLogTracking(client) {
 
         if (newTimeout && newTimeout > Date.now()) {
           const until = Math.floor(newTimeout / 1000);
-          post(client, newMember.guild.id, `⏱️ **${newMember.user.tag}** was timed out by **${by}** until <t:${until}:f> (${reason})`);
+          post(client, newMember.guild.id, `⏱️ **${newMember.user.tag}** was timed out by **${by}** until <t:${until}:f> (${reason})`, {
+            type: 'timeout', targetTag: newMember.user.tag, moderatorTag: by, reason,
+          });
         } else if (oldTimeout && (!newTimeout || newTimeout <= Date.now())) {
-          post(client, newMember.guild.id, `▶️ Timeout removed for **${newMember.user.tag}** by **${by}**`);
+          post(client, newMember.guild.id, `▶️ Timeout removed for **${newMember.user.tag}** by **${by}**`, {
+            type: 'untimeout', targetTag: newMember.user.tag, moderatorTag: by,
+          });
         }
       }
     }
@@ -161,4 +183,7 @@ function setupModLogTracking(client) {
   console.log('Mod-log tracking active (per-server, catches actions from the dashboard AND Discord itself).');
 }
 
-module.exports = { setupModLogTracking };
+// Exported so other modules whose actions have no Discord audit-log entry of
+// their own to hook (warnings aren't a native Discord moderation feature)
+// can still post a properly-cased mod-log line through the same function.
+module.exports = { setupModLogTracking, post };
