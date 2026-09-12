@@ -534,8 +534,13 @@ cmd({
 
 cmd({
   name: 'prefix', aliases: [], category: 'Info', permission: null,
-  usage: '', description: 'Shows the current command prefix.',
-  run: async (message) => `Current prefix: \`${commandConfig.getPrefix(message.guild.id)}\``,
+  usage: '', description: 'Shows the current command prefix(es).',
+  run: async (message) => {
+    const prefixes = commandConfig.getPrefixes(message.guild.id);
+    return prefixes.length > 1
+      ? `Current prefixes: \`${prefixes.join('`, `')}\` (either one works)`
+      : `Current prefix: \`${prefixes[0]}\``;
+  },
 });
 
 cmd({

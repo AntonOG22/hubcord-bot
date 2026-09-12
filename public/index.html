@@ -554,9 +554,10 @@
 
           <section class="card wide">
             <h2>Prefix</h2>
-            <p class="muted small">Used to trigger commands in any channel, e.g. <code>!kick @user</code>.</p>
+            <p class="muted small">Used to trigger commands in any channel, e.g. <code>!kick @user</code>. Optionally set a second prefix too — both work at the same time (e.g. <code>!</code> and <code>?</code>).</p>
             <div class="row">
               <input id="cmd-prefix-input" type="text" maxlength="3" placeholder="!" style="max-width:100px" />
+              <input id="cmd-prefix-secondary-input" type="text" maxlength="3" placeholder="optional, e.g. ?" style="max-width:140px" />
               <button id="cmd-prefix-save-btn" class="primary-button">Save Prefix</button>
             </div>
             <p id="cmd-prefix-feedback" class="feedback-text"></p>

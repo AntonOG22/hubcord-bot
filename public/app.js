@@ -2388,6 +2388,7 @@ async function refreshCommands() {
   const data = await res.json();
   commandsCache = data.commands;
   document.getElementById('cmd-prefix-input').value = data.prefix;
+  document.getElementById('cmd-prefix-secondary-input').value = data.secondaryPrefix || '';
   document.getElementById('cmd-count-label').textContent = `${data.commands.length} commands available, grouped by category.`;
   renderCommandList();
 }
@@ -2435,9 +2436,10 @@ function renderCommandList() {
 async function saveCommandPrefix() {
   const feedback = document.getElementById('cmd-prefix-feedback');
   const prefix = document.getElementById('cmd-prefix-input').value.trim();
+  const secondaryPrefix = document.getElementById('cmd-prefix-secondary-input').value.trim();
   if (!prefix) return setFeedback(feedback, 'Prefix cannot be empty.', false);
 
-  const res = await api('/api/commands/prefix', { method: 'POST', body: JSON.stringify({ prefix }) });
+  const res = await api('/api/commands/prefix', { method: 'POST', body: JSON.stringify({ prefix, secondaryPrefix }) });
   if (res.ok) {
     setFeedback(feedback, 'Saved!', true);
     refreshAuditLog();

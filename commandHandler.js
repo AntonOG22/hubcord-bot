@@ -68,8 +68,11 @@ function setupCommandHandler(client, ctx) {
   client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
-    const prefix = commandConfig.getPrefix(message.guild.id);
-    if (!message.content.startsWith(prefix)) return;
+    // Longest-first (see getPrefixes) so e.g. a configured "!" and "!!" pair
+    // doesn't always match the shorter one first and leave a stray "!" glued
+    // onto the command name.
+    const prefix = commandConfig.getPrefixes(message.guild.id).find((p) => message.content.startsWith(p));
+    if (!prefix) return;
 
     const args = message.content.slice(prefix.length).trim().split(/\s+/);
     const commandName = args.shift()?.toLowerCase();

@@ -481,8 +481,15 @@ const TOOLS = [
     name: 'set_command_prefix',
     method: 'POST',
     path: '/api/commands/prefix',
-    description: "Change this server's chat command prefix (1-3 characters).",
-    parameters: { type: 'object', properties: { prefix: { type: 'string' } }, required: ['prefix'] },
+    description: "Change this server's chat command prefix (1-3 characters). An optional second prefix can be active at the same time as the primary one — pass empty/omit secondaryPrefix to turn that off.",
+    parameters: {
+      type: 'object',
+      properties: {
+        prefix: { type: 'string' },
+        secondaryPrefix: { type: 'string', description: 'Optional second prefix, active alongside the primary one. Leave empty to have just one prefix.' },
+      },
+      required: ['prefix'],
+    },
   },
   {
     name: 'toggle_command',

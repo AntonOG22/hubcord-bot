@@ -1387,11 +1387,20 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   });
 
   app.post('/api/commands/prefix', requireGuildAccess, (req, res) => {
-    const { prefix } = req.body || {};
+    const { prefix, secondaryPrefix } = req.body || {};
     if (!prefix || prefix.length > 3) return res.status(400).json({ error: 'Prefix must be 1-3 characters' });
+    // secondaryPrefix is optional — empty/null/undefined clears it (single-prefix mode).
+    const cleanSecondary = secondaryPrefix ? String(secondaryPrefix).trim() : '';
+    if (cleanSecondary && cleanSecondary.length > 3) {
+      return res.status(400).json({ error: 'Secondary prefix must be 1-3 characters' });
+    }
+    if (cleanSecondary && cleanSecondary === prefix) {
+      return res.status(400).json({ error: 'Secondary prefix must be different from the primary prefix' });
+    }
     commandConfig.setPrefix(req.guildId, prefix);
-    audit(req.guildId, 'Changed command prefix', prefix);
-    res.json({ ok: true, prefix });
+    commandConfig.setSecondaryPrefix(req.guildId, cleanSecondary || null);
+    audit(req.guildId, 'Changed command prefix', cleanSecondary ? `${prefix}, ${cleanSecondary}` : prefix);
+    res.json({ ok: true, prefix, secondaryPrefix: cleanSecondary || null });
   });
 
   app.get('/api/commands', requireGuildAccess, (req, res) => {
@@ -1414,7 +1423,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
         : permissionLabel(c.permission),
       disabled: state.disabled.includes(c.name),
     }));
-    res.json({ prefix: state.prefix, commands: list });
+    res.json({ prefix: state.prefix, secondaryPrefix: state.secondaryPrefix || null, commands: list });
   });
 
   app.post('/api/commands/:name/toggle', requireGuildAccess, (req, res) => {
