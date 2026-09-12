@@ -1179,6 +1179,7 @@ function refreshEverything() {
   refreshCustomCommands();
   refreshRolePanels();
   refreshGuildSettings();
+  refreshLevelRoles();
   refreshJoinLeaveConfig();
   refreshFeatureToggles();
   refreshTicketConfig();
@@ -2888,6 +2889,54 @@ document.getElementById('levelup-channel-save-btn').addEventListener('click', as
     refreshAuditLog();
   } else {
     setFeedback(feedback, 'Failed to save.', false);
+  }
+});
+
+// ---------- Level roles ----------
+
+function renderLevelRoleTierRow(tier = { name: '', minLevel: '', maxLevel: '' }) {
+  const row = document.createElement('div');
+  row.className = 'level-role-tier-row';
+  row.innerHTML = `
+    <input type="text" class="tier-name" placeholder="Role name (e.g. Level 1-4)" value="${escapeHtml(tier.name || '')}" />
+    <input type="number" class="tier-min" placeholder="Min level" min="0" value="${tier.minLevel ?? ''}" />
+    <input type="number" class="tier-max" placeholder="Max level (blank = no cap)" min="0" value="${tier.maxLevel ?? ''}" />
+    <button type="button" class="secondary-button tier-remove-btn">Remove</button>
+  `;
+  row.querySelector('.tier-remove-btn').addEventListener('click', () => row.remove());
+  return row;
+}
+
+async function refreshLevelRoles() {
+  const res = await api('/api/level-roles');
+  if (!res.ok) return;
+  const data = await res.json();
+  document.getElementById('level-roles-enabled').checked = !!data.enabled;
+  const container = document.getElementById('level-roles-tiers');
+  container.innerHTML = '';
+  (data.tiers || []).forEach((tier) => container.appendChild(renderLevelRoleTierRow(tier)));
+}
+
+document.getElementById('level-roles-add-tier-btn').addEventListener('click', () => {
+  document.getElementById('level-roles-tiers').appendChild(renderLevelRoleTierRow());
+});
+
+document.getElementById('level-roles-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('level-roles-feedback');
+  const enabled = document.getElementById('level-roles-enabled').checked;
+  const tiers = Array.from(document.querySelectorAll('#level-roles-tiers .level-role-tier-row')).map((row) => ({
+    name: row.querySelector('.tier-name').value.trim(),
+    minLevel: row.querySelector('.tier-min').value,
+    maxLevel: row.querySelector('.tier-max').value === '' ? null : row.querySelector('.tier-max').value,
+  }));
+  const res = await api('/api/level-roles', { method: 'POST', body: JSON.stringify({ enabled, tiers }) });
+  if (res.ok) {
+    setFeedback(feedback, enabled ? 'Saved — tier roles created/synced!' : 'Saved.', true);
+    refreshAuditLog();
+    refreshLevelRoles();
+  } else {
+    const data = await res.json().catch(() => ({}));
+    setFeedback(feedback, data.error || 'Failed to save.', false);
   }
 });
 

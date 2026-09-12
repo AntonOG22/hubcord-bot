@@ -1193,6 +1193,17 @@ input[type="radio"]:checked::after {
   font-weight: 500;
 }
 
+.level-role-tier-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.level-role-tier-row input {
+  width: 100%;
+}
+
 .command-category {
   margin-top: 18px;
 }

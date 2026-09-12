@@ -1,19 +1,88 @@
 // Per-server message-based leveling system. Each server keeps its own XP totals for
 // the same user — someone active on two servers the bot manages doesn't share a level
 // between them. Cooldown to prevent farming is also tracked per server+user.
+const path = require('path');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const features = require('./features');
 const guildConfig = require('./guildConfig');
+const levelRoles = require('./levelRoles');
 
 const store = makeGuildStore('xp-state.json', () => ({})); // guildId -> { userId: { xp, level, tag } }
-const COOLDOWN_MS = 60 * 1000;
+const COOLDOWN_MS = 60 * 1000; // text-chat cooldown, prevents spam-farming
 const MIN_XP = 15;
 const MAX_XP = 25;
+const VOICE_XP_INTERVAL_MS = 60 * 1000; // grants voice XP once per minute of being connected
 
-let lastGain = {}; // `${guildId}:${userId}` -> timestamp
+const LEVELUP_ICON_PATH = path.join(__dirname, 'assets', 'levelup-icon.webp');
+const LEVELUP_ICON_NAME = 'levelup-icon.webp';
+
+let lastGain = {}; // `${guildId}:${userId}` -> timestamp, text-chat cooldown only
 
 function xpForLevel(level) {
   return 5 * level * level + 50 * level + 100;
+}
+
+function randomXpGain() {
+  return Math.floor(Math.random() * (MAX_XP - MIN_XP + 1)) + MIN_XP;
+}
+
+// Adds XP to a user's stored total and levels them up as many times as the new
+// total covers. Returns the new level if they leveled up at least once this
+// call, otherwise null — shared by both the text-message and voice-tick paths.
+function grantXp(guildId, userId, tag, amount) {
+  const users = store.get(guildId);
+  const user = users[userId] || { xp: 0, level: 0, tag };
+  user.xp += amount;
+  user.tag = tag;
+
+  let newLevel = null;
+  while (user.xp >= xpForLevel(user.level)) {
+    user.level += 1;
+    newLevel = user.level;
+  }
+
+  users[userId] = user;
+  store.save();
+  return newLevel;
+}
+
+// Posts the level-up embed and syncs the member's tier role (if that optional
+// feature is on). `fallbackChannel` is the channel a text message came in on —
+// used only when no level-up channel is configured, so text level-ups never
+// silently go nowhere. Voice-triggered level-ups have no such channel, so they
+// fall back to the configured channel or the server's system channel instead.
+async function announceLevelUp(guild, member, level, fallbackChannel = null) {
+  try {
+    const levelUpChannelId = guildConfig.getConfig(guild.id).levelUpChannelId;
+    let target = fallbackChannel;
+    if (levelUpChannelId) {
+      try {
+        const configured = await guild.channels.fetch(levelUpChannelId);
+        if (configured?.isTextBased()) target = configured;
+      } catch {
+        // configured channel is gone/unfetchable — keep whatever fallback we had
+      }
+    }
+    if (!target) target = guild.systemChannel;
+
+    if (target) {
+      const embed = new EmbedBuilder()
+        .setColor(0x57f287)
+        .setAuthor({ name: member.displayName, iconURL: member.displayAvatarURL() })
+        .setThumbnail(`attachment://${LEVELUP_ICON_NAME}`)
+        .setDescription(`You reached XP level **${level}**, **${member.displayName}**!`)
+        .setFooter({ text: 'Earn more XP by sending messages & talking in voice channels' });
+      const attachment = new AttachmentBuilder(LEVELUP_ICON_PATH, { name: LEVELUP_ICON_NAME });
+      await target.send({ embeds: [embed], files: [attachment] });
+    }
+  } catch (err) {
+    console.error('Could not send level-up message:', err.message);
+  }
+
+  await levelRoles.syncMemberLevelRole(guild, member, level).catch((err) => {
+    console.error('Could not sync level role:', err.message);
+  });
 }
 
 function setupXp(client, { excludedChannelIds = [] } = {}) {
@@ -27,46 +96,37 @@ function setupXp(client, { excludedChannelIds = [] } = {}) {
     if (now - (lastGain[key] || 0) < COOLDOWN_MS) return;
     lastGain[key] = now;
 
-    const users = store.get(message.guild.id);
-    const gained = Math.floor(Math.random() * (MAX_XP - MIN_XP + 1)) + MIN_XP;
-    const user = users[message.author.id] || { xp: 0, level: 0, tag: message.author.tag };
-    user.xp += gained;
-    user.tag = message.author.tag;
-
-    let leveledUp = false;
-    while (user.xp >= xpForLevel(user.level)) {
-      user.level += 1;
-      leveledUp = true;
-    }
-
-    users[message.author.id] = user;
-    store.save();
-
-    if (leveledUp) {
-      try {
-        // Falls back to the channel they were chatting in if no level-up
-        // channel is configured, or if the configured one no longer exists/
-        // isn't fetchable (deleted channel, bot kicked from it, etc.) — a
-        // level-up should never silently go nowhere just because the
-        // configured channel became invalid.
-        const levelUpChannelId = guildConfig.getConfig(message.guild.id).levelUpChannelId;
-        let target = message.channel;
-        if (levelUpChannelId) {
-          try {
-            const configured = await message.guild.channels.fetch(levelUpChannelId);
-            if (configured?.isTextBased()) target = configured;
-          } catch {
-            // configured channel is gone/unfetchable — fall back to message.channel above
-          }
-        }
-        await target.send(`🎉 ${message.author} just reached **Level ${user.level}**!`);
-      } catch (err) {
-        console.error('Could not send level-up message:', err.message);
-      }
+    const newLevel = grantXp(message.guild.id, message.author.id, message.author.tag, randomXpGain());
+    if (newLevel && message.member) {
+      await announceLevelUp(message.guild, message.member, newLevel, message.channel);
     }
   });
 
-  console.log('XP/leveling system active (per-server).');
+  // Voice XP: once a minute, every non-bot member currently sitting in a
+  // (non-AFK) voice channel earns the same XP range as chatting does — being
+  // active in voice is worth just as much as being active in text.
+  setInterval(() => {
+    for (const guild of client.guilds.cache.values()) {
+      if (!features.isEnabled(guild.id, 'xp')) continue;
+      const afkChannelId = guild.afkChannelId;
+
+      for (const channel of guild.channels.cache.values()) {
+        if (!channel.isVoiceBased() || channel.id === afkChannelId) continue;
+
+        for (const member of channel.members.values()) {
+          if (member.user.bot) continue;
+          const newLevel = grantXp(guild.id, member.id, member.user.tag, randomXpGain());
+          if (newLevel) {
+            announceLevelUp(guild, member, newLevel).catch((err) => {
+              console.error('Voice level-up announcement failed:', err.message);
+            });
+          }
+        }
+      }
+    }
+  }, VOICE_XP_INTERVAL_MS);
+
+  console.log('XP/leveling system active (per-server, text + voice).');
 }
 
 function getLeaderboard(guildId, limit = 10) {

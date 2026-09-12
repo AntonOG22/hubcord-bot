@@ -13,6 +13,9 @@ const store = makeGuildStore('guild-config.json', () => ({
   giveawayPingRoleId: null,
   announcementPingRoleId: null,
   levelUpChannelId: null, // if unset, level-up messages post in whichever channel triggered them
+  levelRolesEnabled: false, // opt-in: auto-create & assign tier roles (Level 1-4, 5-24, ...) as members level up
+  levelRoleTiers: null, // null = use levelRoles.js's DEFAULT_TIERS; otherwise an array of {minLevel, maxLevel, name} set from the dashboard
+  levelRoleMap: {}, // tier name -> role ID, filled in once the tier roles are auto-created
   watermarkDisabled: false, // per-server opt-out of the "Emerald" footer, set from the admin panel. Official announcements/broadcasts are never affected — they use their own fixed "verified official" footer specifically to prove they came from the real bot.
   language: 'en', // 'en' | 'de' | 'fr' — see i18n.js for what this actually translates
   disabledFeatures: [], // feature keys turned off for this server — see features.js

@@ -31,6 +31,7 @@ const verificationGate = require('./verificationGate');
 const commandConfig = require('./commandConfig');
 const { commands: commandList } = require('./commandRegistry');
 const guildConfig = require('./guildConfig');
+const levelRoles = require('./levelRoles');
 const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
@@ -1467,6 +1468,40 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     const config = guildConfig.updateConfig(req.guildId, patch);
     audit(req.guildId, 'Updated server settings', Object.keys(patch).join(', '));
     res.json(config);
+  });
+
+  // ---------- Optional level-tier roles ----------
+  // Off by default. Enabling auto-creates one role per tier (Level 1-4, 5-24,
+  // ...) and xpSystem.js keeps every member's tier role synced from then on.
+  app.get('/api/level-roles', requireGuildAccess, (req, res) => {
+    const config = guildConfig.getConfig(req.guildId);
+    res.json({
+      enabled: !!config.levelRolesEnabled,
+      tiers: levelRoles.getTiers(req.guildId),
+      roleMap: config.levelRoleMap || {},
+    });
+  });
+
+  app.post('/api/level-roles', requireGuildAccess, async (req, res) => {
+    try {
+      const { enabled, tiers } = req.body || {};
+      if (Array.isArray(tiers)) {
+        const clean = tiers
+          .map((t) => ({
+            name: String(t.name || '').trim().slice(0, 90),
+            minLevel: parseInt(t.minLevel, 10),
+            maxLevel: t.maxLevel === null || t.maxLevel === '' || t.maxLevel === undefined ? null : parseInt(t.maxLevel, 10),
+          }))
+          .filter((t) => t.name && Number.isInteger(t.minLevel) && t.minLevel >= 0);
+        if (clean.length) guildConfig.updateConfig(req.guildId, { levelRoleTiers: clean, levelRoleMap: {} });
+      }
+      await levelRoles.setEnabled(req.guild, !!enabled);
+      audit(req.guildId, 'Updated level-role tiers', enabled ? 'enabled' : 'disabled');
+      const config = guildConfig.getConfig(req.guildId);
+      res.json({ enabled: !!config.levelRolesEnabled, tiers: levelRoles.getTiers(req.guildId), roleMap: config.levelRoleMap || {} });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Could not update level roles.' });
+    }
   });
 
   // ---------- Image uploads ----------

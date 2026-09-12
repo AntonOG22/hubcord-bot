@@ -12,6 +12,7 @@ const { isProtectedTarget } = require('./ownerProtection');
 
 const warnings = require('./warnings');
 const xpSystem = require('./xpSystem');
+const levelRoles = require('./levelRoles');
 const stickyMessages = require('./stickyMessages');
 const autoResponses = require('./autoResponses');
 const giveaways = require('./giveaways');
@@ -1167,6 +1168,7 @@ cmd({
       return `✅ **${member.user.tag}** now has ${current.xp + amount} XP (Level ${current.level})`;
     }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, amount);
+    await levelRoles.syncMemberLevelRole(message.guild, member, user.level).catch(() => {});
     return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
 });
@@ -1184,6 +1186,7 @@ cmd({
       return `✅ **${member.user.tag}** now has ${Math.max(0, current.xp - amount)} XP (Level ${current.level})`;
     }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, -amount);
+    await levelRoles.syncMemberLevelRole(message.guild, member, user.level).catch(() => {});
     return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
 });
@@ -1196,7 +1199,10 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const level = parseInt(args[1], 10);
     if (level === undefined || isNaN(level)) throw new Error('Provide a level.');
-    if (!isProtectedTarget(message.author.id, member.id)) xpSystem.setLevel(message.guild.id, member.id, member.user.tag, level);
+    if (!isProtectedTarget(message.author.id, member.id)) {
+      xpSystem.setLevel(message.guild.id, member.id, member.user.tag, level);
+      await levelRoles.syncMemberLevelRole(message.guild, member, level).catch(() => {});
+    }
     return `✅ **${member.user.tag}** is now Level ${level}`;
   },
 });

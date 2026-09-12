@@ -1138,17 +1138,36 @@
         <div class="page-head">
           <span class="page-eyebrow">World</span>
           <h1>Leveling</h1>
-          <p class="muted">Members earn XP from chatting. Top 15 shown below.</p>
+          <p class="muted">Members earn XP from chatting and from talking in voice channels. Top 15 shown below.</p>
         </div>
 
         <div class="grid">
           <section class="card wide">
             <h2>Level-Up Announcements</h2>
-            <p class="muted small">Where "🎉 X just reached Level Y!" gets posted. Leave unset and it posts in whichever channel the member was chatting in when they leveled up.</p>
+            <p class="muted small">Where the level-up card gets posted. Leave unset and it posts in whichever channel the member was chatting in when they leveled up (voice level-ups always use this channel, or the server's system channel if unset).</p>
             <label class="field-label" for="settings-levelup-channel">Level-up channel</label>
             <select id="settings-levelup-channel"><option value="">— post in the channel they leveled up in —</option></select>
             <button id="levelup-channel-save-btn" class="primary-button">Save</button>
             <p id="levelup-channel-feedback" class="feedback-text"></p>
+          </section>
+
+          <section class="card wide">
+            <h2>Level Roles</h2>
+            <p class="muted small">Optional. When on, the bot auto-creates one role per tier below and keeps every member wearing whichever tier role matches their current level — off by default.</p>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Auto-assign level roles</div>
+                <div class="muted small">Turning this on creates any missing tier roles right away.</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="level-roles-enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div id="level-roles-tiers"></div>
+            <button id="level-roles-add-tier-btn" class="secondary-button" type="button">+ Add tier</button>
+            <button id="level-roles-save-btn" class="primary-button">Save</button>
+            <p id="level-roles-feedback" class="feedback-text"></p>
           </section>
 
           <section class="card wide">
