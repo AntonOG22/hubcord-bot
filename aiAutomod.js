@@ -32,11 +32,11 @@ const botActionRegistry = require('./botActionRegistry');
 const { brandFooter } = require('./brand');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// gemma2-9b-it turned out to be decommissioned too — back to Groq's own
-// current, recommended small model. If the account-access issue that was
-// causing "model_not_found" on this exact model got resolved, this should
-// just work now.
-const MODEL = 'llama-3.1-8b-instant';
+// The account confirmed openai/gpt-oss-120b works via Groq's own Playground
+// (llama-3.x models kept 404ing as "not found" even after a fresh key/
+// verification) — using the smaller sibling here since this runs on every
+// eligible chat message across every server and speed/cost matters most.
+const MODEL = 'openai/gpt-oss-20b';
 const MEMORY_MAX_NOTES_PER_USER = 5;
 
 const RATE_LIMIT_MAX = 20; // messages sent to the model per guild per minute, max
