@@ -32,7 +32,7 @@ const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const music = require('./music');
-const { getEmoji } = require('./emoji');
+const { getEmoji, EMOJI_MAP } = require('./emoji');
 const ticTacToe = require('./ticTacToe');
 const imposter = require('./imposter');
 
@@ -228,17 +228,28 @@ cmd({
 
 cmd({
   name: 'customicons', aliases: ['customemojis'], category: 'Info', permission: P.Administrator,
-  usage: '', description: "Posts every custom emoji on this server, one per line with its name.",
+  usage: '', description: "Posts every custom icon Emerald has uploaded for itself (not this server's own emojis), one per line with a short description.",
   run: async (message) => {
-    const emojis = [...message.guild.emojis.cache.values()];
-    if (emojis.length === 0) return 'This server has no custom emojis.';
+    const appEmojis = [...(message.client.application?.emojis?.cache.values() || [])];
+    if (appEmojis.length === 0) return "Emerald hasn't uploaded any custom icons yet.";
 
-    const lines = emojis.map((e) => `${e.toString()} — \`:${e.name}:\`${e.animated ? ' (animated)' : ''}`);
+    // EMOJI_MAP's key doubles as a short, human-readable description — the
+    // application emoji's own `name` is what actually matches it back to a
+    // map entry (both are set to the same value when uploaded, see emoji.js).
+    const nameToKey = new Map(Object.entries(EMOJI_MAP).map(([key, e]) => [e.name, key]));
+    const humanize = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-    // Discord's 2000-char message limit means a server with a lot of emojis
-    // needs more than one message — chunked so no line is ever cut in half.
+    const sorted = appEmojis.sort((a, b) => a.name.localeCompare(b.name));
+    const lines = sorted.map((e) => {
+      const key = nameToKey.get(e.name);
+      const description = key ? humanize(key) : 'No description';
+      return `${e.toString()} \`${e.name}\` — ${description}`;
+    });
+
+    // Discord's 2000-char message limit means having a lot of icons needs
+    // more than one message — chunked so no line is ever cut in half.
     const chunks = [];
-    let current = `**Custom emojis (${emojis.length}):**`;
+    let current = `**Emerald's custom icons (${appEmojis.length}):**`;
     for (const line of lines) {
       if ((current + '\n' + line).length > 1900) {
         chunks.push(current);
