@@ -32,6 +32,7 @@ const tickets = require('./tickets');
 const rateCommands = require('./rateCommands');
 const rolePanels = require('./rolePanels');
 const music = require('./music');
+const { getEmoji } = require('./emoji');
 const ticTacToe = require('./ticTacToe');
 const imposter = require('./imposter');
 
@@ -1409,7 +1410,7 @@ cmd({
     if (!query) throw new Error('Give me a song name or a YouTube link, e.g. `!musik never gonna give you up`.');
     const result = await music.enqueue(message, query);
     if (result.startingNow) return null; // playNext() already posts its own "Now playing" embed
-    return `🎶 Added to the queue at position **${result.position + 1}**: ${result.entry.query}`;
+    return `${getEmoji(message.guild.id, 'music_note', message.client)} Added to the queue at position **${result.position + 1}**: ${result.entry.query}`;
   },
 });
 
@@ -1422,10 +1423,10 @@ cmd({
     const status = music.getStatus(message.guild.id);
     if (!status.current && status.queue.length === 0) return 'Nothing is playing and the queue is empty.';
     const lines = [];
-    if (status.current) lines.push(`▶️ **Now playing:** ${status.current.title} (requested by <@${status.current.requestedBy}>)`);
+    if (status.current) lines.push(`${getEmoji(message.guild.id, 'music_play', message.client)} **Now playing:** ${status.current.title} (requested by <@${status.current.requestedBy}>)`);
     if (status.queue.length > 0) {
       lines.push('', '**Up next:**');
-      status.queue.slice(0, 15).forEach((e, i) => lines.push(`${i + 1}. ${e.title}${e.isAdmin ? ' 👑' : ''} — <@${e.requestedBy}>`));
+      status.queue.slice(0, 15).forEach((e, i) => lines.push(`${i + 1}. ${e.title}${e.isAdmin ? ` ${getEmoji(message.guild.id, 'music_crown', message.client)}` : ''} — <@${e.requestedBy}>`));
       if (status.queue.length > 15) lines.push(`…and ${status.queue.length - 15} more.`);
     }
     return lines.join('\n');
@@ -1443,7 +1444,7 @@ cmd({
 
     const embed = new EmbedBuilder()
       .setColor(0x3ecf8e)
-      .setTitle(`${status.paused ? '⏸️' : '▶️'} ${status.current.title}`)
+      .setTitle(`${status.paused ? getEmoji(message.guild.id, 'music_pause', message.client) : getEmoji(message.guild.id, 'music_play', message.client)} ${status.current.title}`)
       .setDescription(music.buildProgressBar(status.current.elapsedSeconds, status.current.duration))
       .addFields({ name: 'Requested by', value: status.current.requestedByTag || `<@${status.current.requestedBy}>`, inline: true })
       .setFooter(brandFooter(message.client, message.guild.id));
@@ -1473,7 +1474,7 @@ cmd({
     music.requireVoiceChatChannel(message);
     if (!music.isActive(message.guild.id)) return 'Nothing is playing.';
     music.skip(message.guild.id);
-    return '⏭️ Skipped.';
+    return `${getEmoji(message.guild.id, 'music_skip', message.client)} Skipped.`;
   },
 });
 
@@ -1487,8 +1488,8 @@ cmd({
     const memberCount = voiceChannel ? voiceChannel.members.filter((m) => !m.user.bot).size : 1;
     const result = music.voteSkip(message.guild.id, message.member, memberCount);
     return result.skipped
-      ? `⏭️ Vote passed (${result.votes}/${result.needed}) — skipped!`
-      : `🗳️ Vote to skip: **${result.votes}/${result.needed}** needed.`;
+      ? `${getEmoji(message.guild.id, 'music_skip', message.client)} Vote passed (${result.votes}/${result.needed}) — skipped!`
+      : `${getEmoji(message.guild.id, 'music_vote', message.client)} Vote to skip: **${result.votes}/${result.needed}** needed.`;
   },
 });
 
@@ -1498,7 +1499,7 @@ cmd({
   run: async (message) => {
     music.requirePermission(message.guild.id, 'pause', message.member);
     music.requireVoiceChatChannel(message);
-    return music.pause(message.guild.id) ? '⏸️ Paused.' : 'Nothing is playing.';
+    return music.pause(message.guild.id) ? `${getEmoji(message.guild.id, 'music_pause', message.client)} Paused.` : 'Nothing is playing.';
   },
 });
 
@@ -1508,7 +1509,7 @@ cmd({
   run: async (message) => {
     music.requirePermission(message.guild.id, 'resume', message.member);
     music.requireVoiceChatChannel(message);
-    return music.resume(message.guild.id) ? '▶️ Resumed.' : 'Nothing is paused.';
+    return music.resume(message.guild.id) ? `${getEmoji(message.guild.id, 'music_play', message.client)} Resumed.` : 'Nothing is paused.';
   },
 });
 
@@ -1520,7 +1521,7 @@ cmd({
     music.requireVoiceChatChannel(message);
     if (!music.isActive(message.guild.id)) return 'I\'m not in a voice channel right now.';
     music.stop(message.guild.id);
-    return '⏹️ Stopped, queue cleared, see you later!';
+    return `${getEmoji(message.guild.id, 'music_stop', message.client)} Stopped, queue cleared, see you later!`;
   },
 });
 
@@ -1555,9 +1556,9 @@ cmd({
   run: async (message, args) => {
     music.requirePermission(message.guild.id, 'volume', message.member);
     music.requireVoiceChatChannel(message);
-    if (!args[0]) return `🔊 Current volume: ${music.getStatus(message.guild.id).volume}%`;
+    if (!args[0]) return `${getEmoji(message.guild.id, 'music_volume', message.client)} Current volume: ${music.getStatus(message.guild.id).volume}%`;
     const vol = music.setVolume(message.guild.id, args[0]);
-    return `🔊 Volume set to ${vol}%.`;
+    return `${getEmoji(message.guild.id, 'music_volume', message.client)} Volume set to ${vol}%.`;
   },
 });
 
@@ -1568,7 +1569,7 @@ cmd({
     music.requirePermission(message.guild.id, 'loop', message.member);
     music.requireVoiceChatChannel(message);
     const looping = music.toggleLoop(message.guild.id);
-    return looping ? '🔁 Looping is now ON.' : '🔁 Looping is now OFF.';
+    return looping ? `${getEmoji(message.guild.id, 'music_loop', message.client)} Looping is now ON.` : `${getEmoji(message.guild.id, 'music_loop', message.client)} Looping is now OFF.`;
   },
 });
 
@@ -1580,7 +1581,7 @@ cmd({
     const mood = args.join(' ').trim();
     if (!mood) throw new Error('Tell me what kind of music, e.g. `!automatic relaxing` or `!automatic hype gaming music`.');
     await music.startAutomatic(message, mood);
-    return `🔀 Automatic mode started: **${mood}**. Only admins can control music until \`!automaticstop\`.`;
+    return `${getEmoji(message.guild.id, 'music_shuffle', message.client)} Automatic mode started: **${mood}**. Only admins can control music until \`!automaticstop\`.`;
   },
 });
 
@@ -1590,7 +1591,7 @@ cmd({
   run: async (message) => {
     music.requirePermission(message.guild.id, 'automaticstop', message.member);
     const stopped = music.stopAutomatic(message.guild.id);
-    return stopped ? '🔀 Automatic mode stopped.' : "Automatic mode isn't running.";
+    return stopped ? `${getEmoji(message.guild.id, 'music_shuffle', message.client)} Automatic mode stopped.` : "Automatic mode isn't running.";
   },
 });
 

@@ -2828,7 +2828,16 @@ async function refreshGuildSettings() {
   document.getElementById('settings-giveaway-ping-role').value = config.giveawayPingRoleId || '';
   document.getElementById('settings-announcement-ping-role').value = config.announcementPingRoleId || '';
   document.getElementById('settings-language').value = config.language || 'en';
+  document.getElementById('emoji-style-select').value = config.emojiStyle || 'standard';
 }
+
+document.getElementById('emoji-style-save-btn').addEventListener('click', async () => {
+  const feedback = document.getElementById('emoji-style-feedback');
+  const emojiStyle = document.getElementById('emoji-style-select').value;
+  const res = await api('/api/guild-config', { method: 'POST', body: JSON.stringify({ emojiStyle }) });
+  setFeedback(feedback, res.ok ? 'Saved!' : 'Failed to save.', res.ok);
+  if (res.ok) refreshAuditLog();
+});
 
 async function refreshBotNickname() {
   const res = await api('/api/bot-nickname');
