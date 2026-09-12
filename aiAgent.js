@@ -15,9 +15,9 @@
 const http = require('http');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// llama-3.1-8b-instant still 404'd on two different accounts' keys — trying
-// a different model family (Google's Gemma 2, not Llama), see aiAutomod.js.
-const MODEL = 'gemma2-9b-it';
+// gemma2-9b-it turned out to be decommissioned too — back to Groq's own
+// current, recommended small model, see aiAutomod.js.
+const MODEL = 'llama-3.1-8b-instant';
 const MAX_TOOL_ITERATIONS = 6;
 
 const SYSTEM_PROMPT = `You are the built-in assistant inside the Emerald Discord bot's admin dashboard, currently helping manage the server "{{guildName}}".
