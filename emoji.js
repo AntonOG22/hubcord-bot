@@ -11,6 +11,8 @@
 //     here needs to know real Discord snowflake IDs; whatever hasn't
 //     actually been uploaded yet just quietly falls back to the standard
 //     emoji for that one entry instead of breaking.
+const fs = require('fs');
+const path = require('path');
 const guildConfig = require('./guildConfig');
 
 // key -> { std: <Unicode emoji>, name: <application emoji name, see emojis/*.png> }
@@ -82,4 +84,30 @@ function getEmoji(guildId, key, client) {
   return found ? `<:${found.name}:${found.id}>` : entry.std;
 }
 
-module.exports = { getEmoji, EMOJI_MAP };
+// One-time-per-boot, idempotent upload: pushes any emojis/*.png that isn't
+// already a real Discord application emoji yet. Safe to call on every
+// startup — anything already uploaded (matched by name) is skipped, so this
+// only ever does work the first time (or when a new icon file is added).
+// Call after client.application.emojis.fetch() so the cache used for the
+// "already exists" check is actually populated.
+async function uploadMissingApplicationEmojis(client) {
+  const dir = path.join(__dirname, 'emojis');
+  if (!fs.existsSync(dir)) return;
+  const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png'));
+  const existingNames = new Set(client.application.emojis.cache.map((e) => e.name));
+  let created = 0;
+  for (const file of files) {
+    const name = path.basename(file, '.png');
+    if (existingNames.has(name)) continue;
+    try {
+      await client.application.emojis.create({ name, attachment: path.join(dir, file) });
+      created++;
+      console.log(`Uploaded application emoji: ${name}`);
+    } catch (err) {
+      console.error(`Could not upload application emoji "${name}":`, err.message);
+    }
+  }
+  if (created > 0) console.log(`Uploaded ${created} new application emoji(s) (${existingNames.size + created}/${files.length} total now live).`);
+}
+
+module.exports = { getEmoji, EMOJI_MAP, uploadMissingApplicationEmojis };

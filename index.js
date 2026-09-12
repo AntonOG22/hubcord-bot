@@ -19,6 +19,7 @@ const verificationGate = require('./verificationGate');
 const { setupCommandHandler } = require('./commandHandler');
 const { setupSlashCommands } = require('./slashCommands');
 const guildConfig = require('./guildConfig');
+const { uploadMissingApplicationEmojis } = require('./emoji');
 const { setupTickets } = require('./tickets');
 const { setupRolePanels } = require('./rolePanels');
 const { setupJoinLeaveMessages } = require('./joinLeaveMessages');
@@ -92,8 +93,9 @@ client.once('ready', async () => {
     await client.application.fetch();
     await client.application.emojis.fetch();
     console.log(`Loaded ${client.application.emojis.cache.size} custom application emoji(s).`);
+    await uploadMissingApplicationEmojis(client);
   } catch (err) {
-    console.error('Could not load application emojis (custom emoji style will fall back to standard):', err.message);
+    console.error('Could not load/upload application emojis (custom emoji style will fall back to standard):', err.message);
   }
 
   setupCounting(client);
