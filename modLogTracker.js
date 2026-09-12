@@ -7,6 +7,7 @@ const guildConfig = require('./guildConfig');
 const features = require('./features');
 const botActionRegistry = require('./botActionRegistry');
 const modCases = require('./modCases');
+const { getEmoji } = require('./emoji');
 
 // Finds the most recent matching audit log entry for a target, so we know who did it.
 async function findAuditEntry(guild, type, targetId) {
@@ -57,7 +58,7 @@ function setupModLogTracking(client) {
     const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
     const reason = entry?.reason || 'no reason given';
-    post(client, ban.guild.id, `🔨 **${ban.user.tag}** was banned by **${by}** (${reason})`, {
+    post(client, ban.guild.id, `${getEmoji(ban.guild.id, 'mod_ban', client)} **${ban.user.tag}** was banned by **${by}** (${reason})`, {
       type: 'ban', targetTag: ban.user.tag, moderatorTag: by, reason,
     });
   });
@@ -65,7 +66,7 @@ function setupModLogTracking(client) {
   client.on('guildBanRemove', async (ban) => {
     const entry = await findAuditEntry(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
-    post(client, ban.guild.id, `✅ **${ban.user.tag}** was unbanned by **${by}**`, {
+    post(client, ban.guild.id, `${getEmoji(ban.guild.id, 'status_success', client)} **${ban.user.tag}** was unbanned by **${by}**`, {
       type: 'unban', targetTag: ban.user.tag, moderatorTag: by,
     });
   });
@@ -77,7 +78,7 @@ function setupModLogTracking(client) {
     if (!entry) return;
     const by = entry.executor ? entry.executor.tag : 'unknown';
     const reason = entry.reason || 'no reason given';
-    post(client, member.guild.id, `👢 **${member.user.tag}** was kicked by **${by}** (${reason})`, {
+    post(client, member.guild.id, `${getEmoji(member.guild.id, 'mod_kick', client)} **${member.user.tag}** was kicked by **${by}** (${reason})`, {
       type: 'kick', targetTag: member.user.tag, moderatorTag: by, reason,
     });
   });
@@ -121,11 +122,11 @@ function setupModLogTracking(client) {
 
       for (const id of added) {
         const role = newMember.guild.roles.cache.get(id);
-        post(client, newMember.guild.id, `➕ Role **${role?.name || id}** added to **${newMember.user.tag}** by **${by}**`);
+        post(client, newMember.guild.id, `${getEmoji(newMember.guild.id, 'ticket_add', client)} Role **${role?.name || id}** added to **${newMember.user.tag}** by **${by}**`);
       }
       for (const id of removed) {
         const role = newMember.guild.roles.cache.get(id);
-        post(client, newMember.guild.id, `➖ Role **${role?.name || id}** removed from **${newMember.user.tag}** by **${by}**`);
+        post(client, newMember.guild.id, `${getEmoji(newMember.guild.id, 'ticket_remove', client)} Role **${role?.name || id}** removed from **${newMember.user.tag}** by **${by}**`);
       }
     }
   });
@@ -133,7 +134,7 @@ function setupModLogTracking(client) {
   client.on('messageDeleteBulk', async (messages, channel) => {
     const entry = await findAuditEntry(channel.guild, AuditLogEvent.MessageBulkDelete, channel.id);
     const by = entry?.executor ? entry.executor.tag : 'unknown';
-    post(client, channel.guild.id, `🧹 **${messages.size}** messages purged in #${channel.name} by **${by}**`);
+    post(client, channel.guild.id, `${getEmoji(channel.guild.id, 'mod_purge', client)} **${messages.size}** messages purged in #${channel.name} by **${by}**`);
   });
 
   // Single-message delete/edit — clip() keeps a very long message from

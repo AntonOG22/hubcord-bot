@@ -30,6 +30,7 @@ const automod = require('./automod');
 const { sendModerationDm } = require('./moderationDm');
 const botActionRegistry = require('./botActionRegistry');
 const { brandFooter } = require('./brand');
+const { getEmoji } = require('./emoji');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // The account confirmed openai/gpt-oss-120b works via Groq's own Playground
@@ -126,7 +127,7 @@ async function notifyOutage(client, guildId) {
   if (!modLogsChannelId) return;
   try {
     const channel = await client.channels.fetch(modLogsChannelId);
-    await channel.send('⚠️ Automod AI is currently unavailable. We apologize for the inconvenience — the rest of automod (link/word filters, etc.) is unaffected and still active.');
+    await channel.send(`${getEmoji(guildId, 'status_warning', client)} Automod AI is currently unavailable. We apologize for the inconvenience — the rest of automod (link/word filters, etc.) is unaffected and still active.`);
   } catch {
     // best-effort only, never let a notification failure cascade
   }
@@ -231,7 +232,7 @@ async function handleMessage(client, message) {
       const channel = await client.channels.fetch(modLogsChannelId);
       const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
-        .setTitle('🤖 AI Automod Action')
+        .setTitle(`${getEmoji(guildId, 'ai_bot', client)} AI Automod Action`)
         .setDescription(`**User:** ${message.author}\n**Channel:** ${message.channel}\n**Severity:** ${result.severity}\n**Action:** ${action}\n**Reason:** ${result.reason}`)
         .setFooter(brandFooter(client, guildId))
         .setTimestamp();

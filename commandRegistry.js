@@ -94,7 +94,7 @@ cmd({
     if (!member) throw new Error('Could not find that member.');
     const reason = args.slice(1).join(' ') || 'No reason given';
     if (!isProtectedTarget(message.author.id, member.id)) await member.kick(reason);
-    return `👢 Kicked **${member.user.tag}** (${reason})`;
+    return `${getEmoji(message.guild.id, 'mod_kick', message.client)} Kicked **${member.user.tag}** (${reason})`;
   },
 });
 
@@ -109,7 +109,7 @@ cmd({
       await sendModerationDm(message.client, member, message.guild, { action: 'ban', reason, moderatorTag: message.author.tag });
       await member.ban({ reason });
     }
-    return `🔨 Banned **${member.user.tag}** (${reason})`;
+    return `${getEmoji(message.guild.id, 'mod_ban', message.client)} Banned **${member.user.tag}** (${reason})`;
   },
 });
 
@@ -119,7 +119,7 @@ cmd({
   run: async (message, args) => {
     if (!args[0]) throw new Error('Provide a user ID.');
     await message.guild.bans.remove(args[0], 'Unbanned via command');
-    return `✅ Unbanned user ${args[0]}`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Unbanned user ${args[0]}`;
   },
 });
 
@@ -135,7 +135,7 @@ cmd({
       await member.ban({ reason, deleteMessageSeconds: 86400 });
       await message.guild.bans.remove(userId, 'Softban cleanup');
     }
-    return `🧹 Softbanned **${member.user.tag}** (messages cleared, not permanently banned)`;
+    return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Softbanned **${member.user.tag}** (messages cleared, not permanently banned)`;
   },
 });
 
@@ -179,10 +179,10 @@ cmd({
       // Reports a count consistent with what a real warn would have shown
       // (existing total + 1) without ever actually calling addWarning.
       const existing = warnings.getWarnings(message.guild.id, member.id);
-      return `⚠️ Warned **${member.user.tag}** (${existing.length + 1} total)`;
+      return `${getEmoji(message.guild.id, 'status_warning', message.client)} Warned **${member.user.tag}** (${existing.length + 1} total)`;
     }
     const result = await warnings.addWarning(message.client, message.guild, member.id, reason, message.author.tag);
-    return `⚠️ Warned **${member.user.tag}** (${result.warnings.length} total)${result.autoTimedOut ? ' — auto-timed out' : ''}`;
+    return `${getEmoji(message.guild.id, 'status_warning', message.client)} Warned **${member.user.tag}** (${result.warnings.length} total)${result.autoTimedOut ? ' — auto-timed out' : ''}`;
   },
 });
 
@@ -205,7 +205,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     if (!isProtectedTarget(message.author.id, member.id)) warnings.clearWarnings(message.guild.id, member.id);
-    return `🧹 Cleared warnings for **${member.user.tag}**`;
+    return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Cleared warnings for **${member.user.tag}**`;
   },
 });
 
@@ -232,7 +232,7 @@ cmd({
   run: async (message, args) => {
     const amount = Math.min(Math.max(parseInt(args[0], 10) || 0, 1), 100);
     const deleted = await message.channel.bulkDelete(amount + 1, true); // +1 to include the command message
-    return `🧹 Purged ${deleted.size - 1} messages`;
+    return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Purged ${deleted.size - 1} messages`;
   },
 });
 
@@ -243,11 +243,11 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     const amount = Math.min(Math.max(parseInt(args[1], 10) || 0, 1), 100);
-    if (isProtectedTarget(message.author.id, member.id)) return `🧹 Purged ${amount} messages from **${member.user.tag}**`;
+    if (isProtectedTarget(message.author.id, member.id)) return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Purged ${amount} messages from **${member.user.tag}**`;
     const recent = await message.channel.messages.fetch({ limit: 100 });
     const targets = recent.filter((m) => m.author.id === member.id).first(amount);
     await message.channel.bulkDelete(targets, true);
-    return `🧹 Purged ${targets.length} messages from **${member.user.tag}**`;
+    return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Purged ${targets.length} messages from **${member.user.tag}**`;
   },
 });
 
@@ -259,7 +259,7 @@ cmd({
     const recent = await message.channel.messages.fetch({ limit: 100 });
     const targets = recent.filter((m) => m.author.bot).first(amount);
     await message.channel.bulkDelete(targets, true);
-    return `🧹 Purged ${targets.length} bot messages`;
+    return `${getEmoji(message.guild.id, 'mod_purge', message.client)} Purged ${targets.length} bot messages`;
   },
 });
 
@@ -278,7 +278,7 @@ cmd({
   usage: '', description: 'Locks this channel (denies @everyone Send Messages).',
   run: async (message) => {
     await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-    return '🔒 Channel locked';
+    return `${getEmoji(message.guild.id, 'status_locked', message.client)} Channel locked`;
   },
 });
 
@@ -296,7 +296,7 @@ cmd({
   usage: '', description: 'Locks every text channel server-wide.',
   run: async (message) => {
     const count = await antiRaid.setLockdown(message.guild.id, true);
-    return `🔒 Server-wide lockdown enabled (${count} channels)`;
+    return `${getEmoji(message.guild.id, 'status_locked', message.client)} Server-wide lockdown enabled (${count} channels)`;
   },
 });
 
@@ -341,7 +341,7 @@ cmd({
     const role = await resolveRole(message, args.slice(1).join(' '));
     if (!role) throw new Error('Could not find that role.');
     if (!isProtectedTarget(message.author.id, member.id)) await member.roles.add(role);
-    return `➕ Gave **${role.name}** to **${member.user.tag}**`;
+    return `${getEmoji(message.guild.id, 'ticket_add', message.client)} Gave **${role.name}** to **${member.user.tag}**`;
   },
 });
 
@@ -354,7 +354,7 @@ cmd({
     const role = await resolveRole(message, args.slice(1).join(' '));
     if (!role) throw new Error('Could not find that role.');
     if (!isProtectedTarget(message.author.id, member.id)) await member.roles.remove(role);
-    return `➖ Removed **${role.name}** from **${member.user.tag}**`;
+    return `${getEmoji(message.guild.id, 'ticket_remove', message.client)} Removed **${role.name}** from **${member.user.tag}**`;
   },
 });
 
@@ -372,7 +372,7 @@ cmd({
       if (isProtectedTarget(message.author.id, m.id)) { count += 1; continue; } // counted toward the total like everyone else, just never actually touched
       try { await m.roles.add(role); count += 1; } catch { /* skip */ }
     }
-    return `➕ Gave **${role.name}** to ${count} members`;
+    return `${getEmoji(message.guild.id, 'ticket_add', message.client)} Gave **${role.name}** to ${count} members`;
   },
 });
 
@@ -389,7 +389,7 @@ cmd({
     for (const m of targets.values()) {
       try { await m.roles.remove(role); count += 1; } catch { /* skip */ }
     }
-    return `➖ Removed **${role.name}** from ${count} members`;
+    return `${getEmoji(message.guild.id, 'ticket_remove', message.client)} Removed **${role.name}** from ${count} members`;
   },
 });
 
@@ -403,7 +403,7 @@ cmd({
     for (const m of bots.values()) {
       try { await m.kick('Mass bot kick'); count += 1; } catch { /* skip */ }
     }
-    return `👢 Kicked ${count} bots`;
+    return `${getEmoji(message.guild.id, 'mod_kick', message.client)} Kicked ${count} bots`;
   },
 });
 
@@ -438,7 +438,7 @@ cmd({
 cmd({
   name: 'uptime', aliases: [], category: 'Info', permission: null,
   usage: '', description: 'Shows how long the bot has been running.',
-  run: async (message) => `⏳ Bot has been up for ${formatDuration(process.uptime() / 60)}`,
+  run: async (message) => `${getEmoji(message.guild.id, 'status_cooldown', message.client)} Bot has been up for ${formatDuration(process.uptime() / 60)}`,
 });
 
 cmd({
@@ -573,7 +573,7 @@ cmd({
 cmd({
   name: 'botinfo', aliases: ['about'], category: 'Info', permission: null,
   usage: '', description: 'Shows info about the bot.',
-  run: async (message) => `🤖 **${message.client.user.tag}**\nServing ${message.client.guilds.cache.size} server(s)\nPing: ${Math.round(message.client.ws.ping)}ms`,
+  run: async (message) => `${getEmoji(message.guild.id, 'ai_bot', message.client)} **${message.client.user.tag}**\nServing ${message.client.guilds.cache.size} server(s)\nPing: ${Math.round(message.client.ws.ping)}ms`,
 });
 
 cmd({
@@ -604,10 +604,10 @@ cmd({
     if (!target) throw new Error(`Unknown command "${commandToken}".`);
 
     if (!target.permission) {
-      return `✅ **${role.name}** CAN use \`${target.name}\` — it's available to everyone.`;
+      return `${getEmoji(message.guild.id, 'status_success', message.client)} **${role.name}** CAN use \`${target.name}\` — it's available to everyone.`;
     }
     const allowed = role.permissions.has(target.permission);
-    return `${allowed ? '✅' : '🚫'} **${role.name}** ${allowed ? 'CAN' : 'CANNOT'} use \`${target.name}\` (requires **${permissionLabel(target.permission)}**).`;
+    return `${allowed ? getEmoji(message.guild.id, 'status_success', message.client) : '🚫'} **${role.name}** ${allowed ? 'CAN' : 'CANNOT'} use \`${target.name}\` (requires **${permissionLabel(target.permission)}**).`;
   },
 });
 
@@ -618,14 +618,14 @@ cmd({
     const xpList = xpSystem.getLeaderboard(message.guild.id, 5);
     const activeList = stats.getMostActive(message.guild.id, 5);
 
-    const embed = new EmbedBuilder().setTitle('🏆 Leaderboards').setColor(0x3fe8d6).setFooter(brandFooter(message.client, message.guild.id));
+    const embed = new EmbedBuilder().setTitle(`${getEmoji(message.guild.id, 'winner', message.client)} Leaderboards`).setColor(0x3fe8d6).setFooter(brandFooter(message.client, message.guild.id));
 
     embed.addFields({
       name: '⭐ Top XP',
       value: xpList.length ? xpList.map((u, i) => `${i + 1}. ${u.tag} — Lvl ${u.level} (${u.xp} XP)`).join('\n') : 'No data yet.',
     });
     embed.addFields({
-      name: '💬 Most Active (today)',
+      name: `${getEmoji(message.guild.id, 'auto_response', message.client)} Most Active (today)`,
       value: activeList.length ? activeList.map((m, i) => `${i + 1}. ${m.tag} — ${m.count} messages`).join('\n') : 'No data yet.',
     });
 
@@ -806,7 +806,7 @@ cmd({
     if (!announcementsChannelId) throw new Error('No announcements channel set for this server (see the dashboard Server tab).');
     const channel = await message.client.channels.fetch(announcementsChannelId);
     await channel.send({ content: `@everyone ${text}`, allowedMentions: { parse: ['everyone'] } });
-    return '📢 Announcement posted';
+    return `${getEmoji(message.guild.id, 'announcement', message.client)} Announcement posted`;
   },
 });
 
@@ -830,7 +830,7 @@ cmd({
       allowedMentions: config.announcementPingRoleId ? { roles: [config.announcementPingRoleId] } : undefined,
     });
 
-    return `📢 Announcement posted in <#${config.announcementsChannelId}>`;
+    return `${getEmoji(message.guild.id, 'announcement', message.client)} Announcement posted in <#${config.announcementsChannelId}>`;
   },
 });
 
@@ -909,7 +909,7 @@ cmd({
     if (!channelId || !text) throw new Error('Format: sendto #channel message');
     const channel = await message.client.channels.fetch(channelId);
     await channel.send(text);
-    return `✅ Sent to #${channel.name}`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Sent to #${channel.name}`;
   },
 });
 
@@ -929,7 +929,7 @@ cmd({
   usage: '', description: 'Removes the sticky message from this channel.',
   run: async (message, args, ctx) => {
     await stickyMessages.removeSticky(ctx.client, message.channelId);
-    return '✅ Sticky message removed';
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Sticky message removed`;
   },
 });
 
@@ -949,7 +949,7 @@ cmd({
   run: async (message, args) => {
     const templates = {
       maintenance: { title: '🛠️ Scheduled Maintenance', description: 'The server is going down for scheduled maintenance.', color: 0xed4245 },
-      event: { title: '🎉 Event Starting Soon', description: 'Something fun is about to happen — jump in now!', color: 0x57f287 },
+      event: { title: `${getEmoji(message.guild.id, 'giveaway', message.client)} Event Starting Soon`, description: 'Something fun is about to happen — jump in now!', color: 0x57f287 },
     };
     const t = templates[args[0]];
     if (!t) throw new Error('Options: maintenance, event');
@@ -958,7 +958,7 @@ cmd({
     const channel = await message.client.channels.fetch(announcementsChannelId);
     const embed = new EmbedBuilder().setTitle(t.title).setDescription(t.description).setColor(t.color).setFooter(brandFooter(message.client, message.guild.id));
     await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
-    return '📢 Template posted';
+    return `${getEmoji(message.guild.id, 'announcement', message.client)} Template posted`;
   },
 });
 
@@ -971,7 +971,7 @@ cmd({
     const [trigger, reply] = args.join(' ').split('|').map((s) => s.trim());
     if (!trigger || !reply) throw new Error('Format: trigger | reply');
     autoResponses.addResponse(message.guild.id, trigger, reply);
-    return `✅ Auto-response added for "${trigger}"`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Auto-response added for "${trigger}"`;
   },
 });
 
@@ -983,7 +983,7 @@ cmd({
     const match = autoResponses.listResponses(message.guild.id).find((r) => r.trigger.toLowerCase() === trigger.toLowerCase());
     if (!match) throw new Error('No auto-response with that trigger.');
     autoResponses.removeResponse(message.guild.id, match.id);
-    return `✅ Removed auto-response for "${trigger}"`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Removed auto-response for "${trigger}"`;
   },
 });
 
@@ -1007,7 +1007,7 @@ cmd({
     const role = await resolveRole(message, roleToken);
     if (!emoji || !role || !text) throw new Error('Format: reactionrole <emoji> <role> | <message text>');
     await reactionRoles.createReactionRole(message.channelId, text, emoji, role.id);
-    return '✅ Reaction role created';
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Reaction role created`;
   },
 });
 
@@ -1041,7 +1041,7 @@ cmd({
     const panel = rolePanels.getPanels(message.guild.id).find((p) => p.name.toLowerCase() === nameQuery);
     if (!panel) throw new Error(`No role panel named "${nameQuery}". Use !rolepanels to see what's configured.`);
     await rolePanels.postPanel(ctx.client, message.guild.id, panel.id, channelId);
-    return `✅ "${panel.name}" role panel posted in <#${channelId}>`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} "${panel.name}" role panel posted in <#${channelId}>`;
   },
 });
 
@@ -1054,7 +1054,7 @@ cmd({
     if (!minutes || !text) throw new Error('Format: reminderset <minutes> <message>');
     const sendAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
     reminders.createReminder(message.channelId, text, sendAt);
-    return `⏰ Reminder set for ${minutes} minutes from now`;
+    return `${getEmoji(message.guild.id, 'reminder', message.client)} Reminder set for ${minutes} minutes from now`;
   },
 });
 
@@ -1074,7 +1074,7 @@ cmd({
   run: async (message, args) => {
     if (!args[0]) throw new Error('Provide a reminder ID (see reminderlist).');
     reminders.cancelReminder(args[0]);
-    return '✅ Reminder cancelled';
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Reminder cancelled`;
   },
 });
 
@@ -1087,7 +1087,7 @@ cmd({
     const prize = args.slice(2).join(' ');
     if (!minutes || !winners || !prize) throw new Error('Format: giveawaystart <minutes> <winners> <prize>');
     await giveaways.createGiveaway(message.channelId, prize, minutes, winners);
-    return '🎉 Giveaway started!';
+    return `${getEmoji(message.guild.id, 'giveaway', message.client)} Giveaway started!`;
   },
 });
 
@@ -1097,7 +1097,7 @@ cmd({
   run: async (message, args) => {
     if (!args[0]) throw new Error('Provide the giveaway message ID.');
     await giveaways.endGiveawayNow(args[0]);
-    return '🎉 Giveaway ended';
+    return `${getEmoji(message.guild.id, 'giveaway', message.client)} Giveaway ended`;
   },
 });
 
@@ -1129,7 +1129,7 @@ function automodToggleCommand(name, key, label) {
     run: async (message, args) => {
       const on = args[0]?.toLowerCase() === 'on';
       automod.updateConfig(message.guild.id, { [key]: on });
-      return `✅ ${label} is now ${on ? 'ON' : 'OFF'}`;
+      return `${getEmoji(message.guild.id, 'status_success', message.client)} ${label} is now ${on ? 'ON' : 'OFF'}`;
     },
   });
 }
@@ -1146,7 +1146,7 @@ cmd({
   run: async (message, args) => {
     const days = parseInt(args[0], 10) || 0;
     automod.updateConfig(message.guild.id, { accountAgeGateDays: days });
-    return `✅ Account age gate set to ${days} days`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Account age gate set to ${days} days`;
   },
 });
 
@@ -1158,7 +1158,7 @@ cmd({
   run: async (message, args) => {
     const on = args[0]?.toLowerCase() === 'on';
     verificationGate.setEnabled(message.guild.id, on);
-    return `✅ Verification gate is now ${on ? 'ON' : 'OFF'}`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Verification gate is now ${on ? 'ON' : 'OFF'}`;
   },
 });
 
@@ -1167,7 +1167,7 @@ cmd({
   usage: '', description: 'Posts the verify button in this channel.',
   run: async (message, args, ctx) => {
     await verificationGate.postVerificationMessage(ctx.client, message.channelId);
-    return '✅ Verify button posted';
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Verify button posted`;
   },
 });
 
@@ -1187,7 +1187,7 @@ cmd({
   usage: '', description: 'Resets the counting game to 1.',
   run: async (message) => {
     countingGame.resetCountingState(message.guild.id);
-    return '✅ Counting game reset to 1';
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} Counting game reset to 1`;
   },
 });
 
@@ -1205,11 +1205,11 @@ cmd({
       // Reports what adding it WOULD have shown, off the real current
       // value, without ever actually calling addXp.
       const current = xpSystem.getUserXp(message.guild.id, member.id);
-      return `✅ **${member.user.tag}** now has ${current.xp + amount} XP (Level ${current.level})`;
+      return `${getEmoji(message.guild.id, 'status_success', message.client)} **${member.user.tag}** now has ${current.xp + amount} XP (Level ${current.level})`;
     }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, amount);
     await levelRoles.syncMemberLevelRole(message.guild, member, user.level).catch(() => {});
-    return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
 });
 
@@ -1223,11 +1223,11 @@ cmd({
     if (!amount) throw new Error('Provide an amount.');
     if (isProtectedTarget(message.author.id, member.id)) {
       const current = xpSystem.getUserXp(message.guild.id, member.id);
-      return `✅ **${member.user.tag}** now has ${Math.max(0, current.xp - amount)} XP (Level ${current.level})`;
+      return `${getEmoji(message.guild.id, 'status_success', message.client)} **${member.user.tag}** now has ${Math.max(0, current.xp - amount)} XP (Level ${current.level})`;
     }
     const user = xpSystem.addXp(message.guild.id, member.id, member.user.tag, -amount);
     await levelRoles.syncMemberLevelRole(message.guild, member, user.level).catch(() => {});
-    return `✅ **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} **${member.user.tag}** now has ${user.xp} XP (Level ${user.level})`;
   },
 });
 
@@ -1243,7 +1243,7 @@ cmd({
       xpSystem.setLevel(message.guild.id, member.id, member.user.tag, level);
       await levelRoles.syncMemberLevelRole(message.guild, member, level).catch(() => {});
     }
-    return `✅ **${member.user.tag}** is now Level ${level}`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} **${member.user.tag}** is now Level ${level}`;
   },
 });
 
@@ -1263,7 +1263,7 @@ cmd({
       throw new Error(`No panel named "${nameQuery}". Available: ${config.panels.map((p) => p.name).join(', ')}`);
     }
     await tickets.postPanel(ctx.client, message.guild.id, panel.id, channelId);
-    return `✅ "${panel.name}" panel posted in <#${channelId}>`;
+    return `${getEmoji(message.guild.id, 'status_success', message.client)} "${panel.name}" panel posted in <#${channelId}>`;
   },
 });
 
@@ -1301,7 +1301,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     await tickets.addParticipant(message.guild, message.channelId, member);
-    return `➕ Added **${member.user.tag}** to this ticket`;
+    return `${getEmoji(message.guild.id, 'ticket_add', message.client)} Added **${member.user.tag}** to this ticket`;
   },
 });
 
@@ -1312,7 +1312,7 @@ cmd({
     const member = await resolveMember(message, args[0]);
     if (!member) throw new Error('Could not find that member.');
     await tickets.removeParticipant(message.guild, message.channelId, member);
-    return `➖ Removed **${member.user.tag}** from this ticket`;
+    return `${getEmoji(message.guild.id, 'ticket_remove', message.client)} Removed **${member.user.tag}** from this ticket`;
   },
 });
 

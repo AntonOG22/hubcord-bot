@@ -24,6 +24,7 @@ const { EmbedBuilder } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { brandFooter } = require('./brand');
 const features = require('./features');
+const { getEmoji } = require('./emoji');
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes — light on both APIs, fast enough to feel live
 const TWITCH_COLOR = 0x9146ff;
@@ -141,7 +142,7 @@ function buildTwitchEmbed(guildId, entry, info, ended) {
       fields.push({ name: 'Was live', value: `<t:${startedSec}:R> until just now`, inline: true });
     }
   } else {
-    embed.setColor(TWITCH_COLOR).setTitle(`🔴 ${info.userName} is live on Twitch!`);
+    embed.setColor(TWITCH_COLOR).setTitle(`${getEmoji(guildId, 'twitch_live', clientRef)} ${info.userName} is live on Twitch!`);
     if (info.viewers != null) fields.push({ name: 'Viewers', value: String(info.viewers), inline: true });
     if (info.startedAt) fields.push({ name: 'Live since', value: `<t:${Math.floor(new Date(info.startedAt).getTime() / 1000)}:R>`, inline: true });
   }
@@ -157,7 +158,7 @@ function buildTwitchEmbed(guildId, entry, info, ended) {
 function buildYoutubeEmbed(guildId, video) {
   const embed = new EmbedBuilder()
     .setColor(YOUTUBE_COLOR)
-    .setTitle(`📺 New video from ${video.channelName}`)
+    .setTitle(`${getEmoji(guildId, 'youtube', clientRef)} New video from ${video.channelName}`)
     .setURL(video.url)
     .setDescription(video.title)
     .setFooter(brandFooter(clientRef, guildId, 'New on YouTube'))

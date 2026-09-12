@@ -6,6 +6,7 @@
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { makeGuildStore } = require('./guildStore');
 const { brandFooter } = require('./brand');
+const { getEmoji } = require('./emoji');
 
 const store = makeGuildStore('role-panels.json', () => ({ panels: [] }));
 
@@ -49,7 +50,7 @@ function setupRolePanels(client) {
         await interaction.reply({ content: `🔔 Added <@&${roleId}> — you'll now get notified.`, ephemeral: true });
       }
     } catch (err) {
-      await interaction.reply({ content: `❌ Could not update your roles: ${err.message}`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `${getEmoji(interaction.guild.id, 'status_error', interaction.client)} Could not update your roles: ${err.message}`, ephemeral: true }).catch(() => {});
     }
   });
 

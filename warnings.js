@@ -3,6 +3,7 @@
 const { makeGuildStore } = require('./guildStore');
 const { sendModerationDm } = require('./moderationDm');
 const modLogTracker = require('./modLogTracker');
+const { getEmoji } = require('./emoji');
 
 const store = makeGuildStore('warnings-state.json', () => ({})); // guildId -> { userId: [{reason,by,time}] }
 const AUTO_TIMEOUT_THRESHOLD = 3;
@@ -28,7 +29,7 @@ async function addWarning(client, guild, userId, reason, byTag) {
   if (member) await sendModerationDm(client, member, guild, { action: 'warn', reason, moderatorTag: byTag });
 
   const targetTag = member?.user?.tag || userId;
-  modLogTracker.post(client, guild.id, `⚠️ **${targetTag}** was warned by **${byTag}** (${list.length} total): ${reason}`, {
+  modLogTracker.post(client, guild.id, `${getEmoji(guild.id, 'status_warning', client)} **${targetTag}** was warned by **${byTag}** (${list.length} total): ${reason}`, {
     type: 'warn', targetTag, moderatorTag: byTag, reason,
   });
 

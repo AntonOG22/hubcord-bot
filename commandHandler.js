@@ -11,6 +11,7 @@ const { EmbedBuilder } = require('discord.js');
 const { brandFooter } = require('./brand');
 const { t } = require('./i18n');
 const { applyColorCodes, stripColorCodes, applyLinkMasking } = require('./textFormatting');
+const { getEmoji } = require('./emoji');
 
 const commandMap = new Map();
 for (const c of commands) {
@@ -87,7 +88,7 @@ function setupCommandHandler(client, ctx) {
         try {
           await rateCommands.runRate(message, args, rateType);
         } catch (err) {
-          await message.reply(`❌ ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
+          await message.reply(`${getEmoji(message.guild.id, 'status_error', message.client)} ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
         }
         return;
       }
@@ -109,7 +110,7 @@ function setupCommandHandler(client, ctx) {
 
       const cooldownRemaining = customCommands.checkCooldown(message.guild.id, message.author.id, custom);
       if (cooldownRemaining) {
-        await message.reply(`⏳ This command is on cooldown — try again in ${cooldownRemaining}s.`).catch(() => {});
+        await message.reply(`${getEmoji(message.guild.id, 'status_cooldown', message.client)} This command is on cooldown — try again in ${cooldownRemaining}s.`).catch(() => {});
         return;
       }
 
@@ -180,7 +181,7 @@ function setupCommandHandler(client, ctx) {
       const result = await command.run(message, args, ctx);
       if (result) await message.reply(result.length > 1900 ? result.slice(0, 1900) + '…' : result);
     } catch (err) {
-      await message.reply(`❌ ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
+      await message.reply(`${getEmoji(message.guild.id, 'status_error', message.client)} ${err.message || 'Something went wrong running that command.'}`).catch(() => {});
       console.error(`Command "${command.name}" failed:`, err);
     }
   });
