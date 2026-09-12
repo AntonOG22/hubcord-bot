@@ -71,10 +71,13 @@ async function announceLevelUp(guild, member, level, fallbackChannel = null) {
         .setColor(0x57f287)
         .setAuthor({ name: member.displayName, iconURL: member.displayAvatarURL() })
         .setThumbnail(`attachment://${LEVELUP_ICON_NAME}`)
-        .setDescription(`You reached XP level **${level}**, **${member.displayName}**!`)
+        .setDescription(`You reached XP level **${level}**, ${member}!`)
         .setFooter({ text: 'Earn more XP by sending messages & talking in voice channels' });
       const attachment = new AttachmentBuilder(LEVELUP_ICON_PATH, { name: LEVELUP_ICON_NAME });
-      await target.send({ embeds: [embed], files: [attachment] });
+      // The mention inside the embed's description doesn't ping (Discord never
+      // notifies for mentions rendered inside embeds) — this extra plain-text
+      // `content` above it is what actually pings the member.
+      await target.send({ content: `${member}`, embeds: [embed], files: [attachment] });
     }
   } catch (err) {
     console.error('Could not send level-up message:', err.message);
