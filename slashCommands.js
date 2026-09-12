@@ -111,7 +111,11 @@ function buildFakeMessage(interaction) {
 }
 
 function setupSlashCommands(client, ctx) {
-  client.once('ready', () => registerSlashCommands(client));
+  // Called from inside index.js's own client.once('ready', ...) handler, so
+  // the client is already logged in by the time this runs — registering
+  // immediately here, not via another once('ready'), which would silently
+  // never fire (that event has already happened once by this point).
+  registerSlashCommands(client);
 
   client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand() || !interaction.guild) return;

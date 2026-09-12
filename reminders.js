@@ -55,17 +55,20 @@ function setupReminders(client) {
   clientRef = client;
   load();
 
-  client.once('ready', () => {
-    for (const r of reminders) {
-      if (r.sent) continue;
-      const delay = new Date(r.sendAt).getTime() - Date.now();
-      if (delay <= 0) {
-        fireReminder(r.id);
-      } else {
-        scheduleTimer(r.id, delay);
-      }
+  // setupReminders is called from inside index.js's own
+  // client.once('ready', ...) handler, so the client is already ready here —
+  // a nested once('ready') would silently never fire (that event has already
+  // happened once), which used to mean no reminder ever got rescheduled
+  // after a restart.
+  for (const r of reminders) {
+    if (r.sent) continue;
+    const delay = new Date(r.sendAt).getTime() - Date.now();
+    if (delay <= 0) {
+      fireReminder(r.id);
+    } else {
+      scheduleTimer(r.id, delay);
     }
-  });
+  }
 
   console.log('Reminder system active.');
 }

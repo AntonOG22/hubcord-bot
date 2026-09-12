@@ -93,18 +93,21 @@ function setupGiveaways(client) {
   clientRef = client;
   load();
 
-  client.once('ready', () => {
-    // Reschedule anything that was still running when the bot last restarted
-    for (const [messageId, g] of Object.entries(giveaways)) {
-      if (g.ended) continue;
-      const remaining = g.endsAt - Date.now();
-      if (remaining <= 0) {
-        endGiveaway(messageId);
-      } else {
-        scheduleEnd(messageId, remaining);
-      }
+  // Reschedule anything that was still running when the bot last restarted.
+  // setupGiveaways is called from inside index.js's own
+  // client.once('ready', ...) handler, so the client is already ready here —
+  // a nested once('ready') would silently never fire, since that event has
+  // already happened once by this point (this used to be exactly that bug:
+  // giveaways were never actually rescheduled after any restart).
+  for (const [messageId, g] of Object.entries(giveaways)) {
+    if (g.ended) continue;
+    const remaining = g.endsAt - Date.now();
+    if (remaining <= 0) {
+      endGiveaway(messageId);
+    } else {
+      scheduleEnd(messageId, remaining);
     }
-  });
+  }
 
   console.log('Giveaway system active.');
 }

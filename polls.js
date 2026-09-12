@@ -83,15 +83,16 @@ function setupPolls(client) {
   clientRef = client;
   load();
 
-  client.once('ready', () => {
-    // Reschedule anything that was still running when the bot last restarted
-    for (const [messageId, poll] of Object.entries(polls)) {
-      if (poll.ended) continue;
-      const remaining = poll.endsAt - Date.now();
-      if (remaining <= 0) endPoll(messageId);
-      else scheduleEnd(messageId, remaining);
-    }
-  });
+  // Reschedule anything that was still running when the bot last restarted.
+  // setupPolls is called from inside index.js's own client.once('ready', ...)
+  // handler, so the client is already ready here — a nested once('ready')
+  // would silently never fire since that event already happened once.
+  for (const [messageId, poll] of Object.entries(polls)) {
+    if (poll.ended) continue;
+    const remaining = poll.endsAt - Date.now();
+    if (remaining <= 0) endPoll(messageId);
+    else scheduleEnd(messageId, remaining);
+  }
 
   console.log('Timed polls active.');
 }

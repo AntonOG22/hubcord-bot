@@ -56,14 +56,17 @@ function setupStats(client) {
     if (changed) store.save();
   }, 60 * 60 * 1000); // check hourly, only actually snapshots once/day per guild
 
-  // Take one snapshot immediately on startup so the chart isn't empty
-  client.once('ready', () => {
-    for (const guild of client.guilds.cache.values()) {
-      const state = store.get(guild.id);
-      state.memberHistory.push({ time: new Date().toISOString(), count: guild.memberCount });
-    }
-    store.save();
-  });
+  // Take one snapshot immediately on startup so the chart isn't empty. This
+  // setup function is called from inside index.js's own
+  // client.once('ready', ...) handler, so the client is already ready here —
+  // a nested once('ready') would silently never fire (that event has already
+  // happened once), which used to mean this startup snapshot never actually
+  // ran at all.
+  for (const guild of client.guilds.cache.values()) {
+    const state = store.get(guild.id);
+    state.memberHistory.push({ time: new Date().toISOString(), count: guild.memberCount });
+  }
+  store.save();
 
   console.log('Server stats tracking active (per-server).');
 }
