@@ -32,15 +32,12 @@ const botActionRegistry = require('./botActionRegistry');
 const { brandFooter } = require('./brand');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// This IS the correct, current, Groq-recommended model — confirmed by
-// process of elimination: llama3-8b-8192 (tried as a fallback) came back
-// "model_decommissioned" (it's genuinely dead, per Groq's own deprecations
-// page, which recommends switching to exactly this model), while THIS model
-// name comes back "model_not_found" on two different real API keys. That
-// combination means the account itself doesn't have model access enabled
-// yet (e.g. pending verification) — not a wrong model name, and not a
-// specific bad key. See the account's Groq console for the actual fix.
-const MODEL = 'llama-3.1-8b-instant';
+// llama-3.1-8b-instant (Groq's own recommended, current model) still 404'd
+// as "model_not_found" on two different accounts' keys — trying a
+// different model family entirely (Google's Gemma 2, not Llama) in case
+// whatever's blocking this is scoped to Llama models specifically. Small
+// and cheap either way, same reasoning as before.
+const MODEL = 'gemma2-9b-it';
 const MEMORY_MAX_NOTES_PER_USER = 5;
 
 const RATE_LIMIT_MAX = 20; // messages sent to the model per guild per minute, max
