@@ -1,15 +1,15 @@
-// AI-powered automod: a fast, cheap Mistral model looks at each message
+// AI-powered automod: a fast, cheap Groq model looks at each message
 // against the server's own rules (a custom system prompt + a strictness
 // level) and can act on its own — delete, warn, timeout, and only kick/ban
 // once a server has explicitly opted into "strict" mode. Runs alongside
 // (not instead of) the rule-based filters in automod.js, and shares that
 // module's ignore list (roles/channels exempt from automod entirely).
 //
-// Uses its OWN Mistral API key (MISTRAL_AUTOMOD_API_KEY) and its own,
-// smaller/cheaper model — separate from the dashboard's AI agent
-// (aiAgent.js, mistral-large-latest) — so the two features' usage and cost
-// never mix, and this one runs on every eligible chat message while that
-// one only runs when someone actively opens the AI chat widget.
+// Shares the same GROQ_API_KEY as the dashboard's AI agent (aiAgent.js) but
+// uses its own smaller/faster model (llama-3.1-8b-instant vs. that one's
+// llama-3.3-70b-versatile) — this runs on every eligible chat message across
+// every server, so it's tuned for speed/cost over the agent's occasional,
+// more involved tool-calling conversations.
 //
 // Safety rails, in order:
 //   1. Per-server opt-in switch (off by default).
@@ -31,8 +31,8 @@ const { sendModerationDm } = require('./moderationDm');
 const botActionRegistry = require('./botActionRegistry');
 const { brandFooter } = require('./brand');
 
-const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
-const MODEL = 'mistral-small-latest'; // fast + cheap by design — this runs on live chat, not a one-off reply
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = 'llama-3.1-8b-instant'; // fast + cheap by design — this runs on live chat, not a one-off reply
 const MEMORY_MAX_NOTES_PER_USER = 5;
 
 const RATE_LIMIT_MAX = 20; // messages sent to the model per guild per minute, max
@@ -114,7 +114,7 @@ function isRateLimited(guildId) {
 
 async function notifyOutage(client, guildId) {
   // At most one notice every OUTAGE_BACKOFF_MS window — never a message per
-  // failed classification, which could otherwise flood mod-logs if Mistral
+  // failed classification, which could otherwise flood mod-logs if Groq
   // is down for an extended stretch.
   if (Date.now() - outageNotifiedAt < OUTAGE_BACKOFF_MS) return;
   outageNotifiedAt = Date.now();
@@ -135,7 +135,7 @@ async function classify(apiKey, config, guildId, userId, content) {
     .replace('{{memoryContext}}', buildMemoryContext(guildId, userId))
     .replace('{{customPrompt}}', config.systemPrompt ? `\nAdditional server-specific rules from this server's admins:\n${config.systemPrompt}\n` : '');
 
-  const res = await fetch(MISTRAL_URL, {
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -152,21 +152,21 @@ async function classify(apiKey, config, guildId, userId, content) {
 
   if (!res.ok) {
     // The status code alone ("failed: 401" / "failed: 400") was nearly
-    // useless for actually diagnosing a persistent outage — Mistral's error
+    // useless for actually diagnosing a persistent outage — Groq's error
     // body says *why* (bad/revoked key, model deprecated, rate-limited,
     // ...) and that's exactly the detail that was missing every time this
     // showed up as an unexplained "AI automod is currently unavailable" in
     // mod-logs. Bounded so a pathological error page can't blow up the log.
     const bodyText = await res.text().catch(() => '');
-    throw new Error(`Mistral automod request failed: ${res.status} ${res.statusText} — ${bodyText.slice(0, 300)}`);
+    throw new Error(`Groq automod request failed: ${res.status} ${res.statusText} — ${bodyText.slice(0, 300)}`);
   }
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content;
-  if (!raw) throw new Error('Mistral automod returned no content');
+  if (!raw) throw new Error('Groq automod returned no content');
   try {
     return JSON.parse(raw);
   } catch {
-    throw new Error(`Mistral automod returned non-JSON content: ${raw.slice(0, 300)}`);
+    throw new Error(`Groq automod returned non-JSON content: ${raw.slice(0, 300)}`);
   }
 }
 
@@ -179,7 +179,7 @@ async function handleMessage(client, message) {
   if (automod.isIgnored(guildId, message)) return;
   if (!message.content || message.content.trim().length < 3) return; // nothing meaningful to classify
 
-  const apiKey = process.env.MISTRAL_AUTOMOD_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return; // not configured on this bot instance — silently inert, same pattern as e.g. Twitch alerts
 
   if (Date.now() < outageUntil) return;
@@ -244,9 +244,9 @@ function setupAiAutomod(client) {
     handleMessage(client, message).catch((err) => console.error('AI automod handler crashed:', err.message));
   });
   console.log(
-    process.env.MISTRAL_AUTOMOD_API_KEY
-      ? 'AI automod active (Mistral-powered, per-server opt-in).'
-      : 'MISTRAL_AUTOMOD_API_KEY not set — AI automod is disabled bot-wide until it\'s configured.'
+    process.env.GROQ_API_KEY
+      ? 'AI automod active (Groq-powered, per-server opt-in).'
+      : 'GROQ_API_KEY not set — AI automod is disabled bot-wide until it\'s configured.'
   );
 }
 
@@ -261,7 +261,7 @@ function updateConfig(guildId, patch) {
 }
 
 function isConfigured() {
-  return !!process.env.MISTRAL_AUTOMOD_API_KEY;
+  return !!process.env.GROQ_API_KEY;
 }
 
 module.exports = { setupAiAutomod, getConfig, updateConfig, isConfigured };

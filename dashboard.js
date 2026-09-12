@@ -290,7 +290,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   }
 
   // Simple per-user sliding-window rate limiter for endpoints that cost real
-  // money or storage per call (Mistral AI requests, image uploads) — without
+  // money or storage per call (Groq AI requests, image uploads) — without
   // this, any logged-in user could hammer these in a loop and run up costs
   // or fill storage, even though they're otherwise correctly auth-gated.
   // Keyed by session userId (falls back to IP pre-login, though both routes
@@ -1194,9 +1194,9 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
     res.json(config);
   });
 
-  // ---------- AI Automod (Mistral-powered) ----------
+  // ---------- AI Automod (Groq-powered) ----------
   // The API key never leaves this server — the dashboard only ever sees
-  // `configured: true/false` (whether MISTRAL_AUTOMOD_API_KEY is set on this
+  // `configured: true/false` (whether GROQ_API_KEY is set on this
   // deployment), never the key itself.
   const AI_AUTOMOD_STRICTNESS = ['lenient', 'moderate', 'strict'];
   const AI_AUTOMOD_PROMPT_MAX = 2000;
@@ -1979,16 +1979,16 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
   // middleware a second time when the agent's tool calls loop back into this
   // server. See aiAgent.js for the full explanation of that design.
 
-  const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
   // Client-facing errors here are deliberately generic — the AI agent talks
-  // to Mistral's API and to this server's own routes, and neither of those
+  // to Groq's API and to this server's own routes, and neither of those
   // error messages is something a normal dashboard user should have to
   // parse. Full detail always goes to the server log via console.error;
   // the browser only ever gets a flat "failed, try again".
   app.post('/api/ai/chat', requireGuildAccess, aiChatRateLimit, async (req, res) => {
-    if (!MISTRAL_API_KEY) {
-      console.error('AI agent used without MISTRAL_API_KEY configured');
+    if (!GROQ_API_KEY) {
+      console.error('AI agent used without GROQ_API_KEY configured');
       return res.status(503).json({ failed: true });
     }
     const { message, history } = req.body || {};
@@ -2003,7 +2003,7 @@ function startDashboard(client, { port, clientId, clientSecret, sessionSecret, p
 
     try {
       const result = await aiAgent.runAgentTurn({
-        apiKey: MISTRAL_API_KEY,
+        apiKey: GROQ_API_KEY,
         port,
         cookieHeader: req.headers.cookie,
         guildId: req.guildId,

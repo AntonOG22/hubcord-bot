@@ -8,14 +8,14 @@
 // never do more than the person driving it is already allowed to do — no
 // separate, weaker permission path exists for it.
 //
-// The Mistral API key never reaches the browser: it's read once from
+// The Groq API key never reaches the browser: it's read once from
 // process.env here, on the server, and every chat call happens server-side.
 // The client only ever sees the assistant's replies and a summary of which
 // actions it took.
 const http = require('http');
 
-const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
-const MODEL = 'mistral-large-latest';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = 'llama-3.3-70b-versatile'; // strong tool-use/reasoning, still fast+cheap on Groq's hardware
 const MAX_TOOL_ITERATIONS = 6;
 
 const SYSTEM_PROMPT = `You are the built-in assistant inside the Emerald Discord bot's admin dashboard, currently helping manage the server "{{guildName}}".
@@ -572,7 +572,7 @@ const TOOLS = [
   },
 ];
 
-function toMistralTool(tool) {
+function toGroqTool(tool) {
   return {
     type: 'function',
     function: {
@@ -642,13 +642,13 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
   const pendingActions = [];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const resp = await fetch(MISTRAL_URL, {
+    const resp = await fetch(GROQ_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
         messages,
-        tools: TOOLS.map(toMistralTool),
+        tools: TOOLS.map(toGroqTool),
         tool_choice: 'auto',
         temperature: 0.3,
       }),
@@ -656,7 +656,7 @@ async function runAgentTurn({ apiKey, port, cookieHeader, guildId, guildName, hi
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
-      console.error(`Mistral API error ${resp.status}: ${errText.slice(0, 300)}`);
+      console.error(`Groq API error ${resp.status}: ${errText.slice(0, 300)}`);
       throw new Error('AI agent request failed');
     }
 
